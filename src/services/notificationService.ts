@@ -42,6 +42,7 @@ async function registerDevice(user:User){
   if(!firebaseApp||!firebaseAuth?.currentUser||!firestoreDb)throw new Error('Firebase is not ready.');
   const registration=await navigator.serviceWorker.register('/firebase-messaging-sw.js',{scope:'/',updateViaCache:'none'});
   await navigator.serviceWorker.ready;
+  if(!await firebaseMessagingSupported())throw new Error('Firebase Messaging could not initialize on this device.');
   const messaging=getMessaging(firebaseApp);
   const token=await getToken(messaging,{vapidKey:VAPID_PUBLIC_KEY,serviceWorkerRegistration:registration});
   if(!token)throw new Error('This browser did not return a notification registration.');

@@ -77,6 +77,7 @@ Top-level Firestore collections:
 - `cycles`
 - `timeEntries`
 - `authProfiles` (Authentication UID → stable app user ID)
+- `notificationDevices` (one enabled FCM registration per user installation)
 
 Dates without a time component remain ISO `YYYY-MM-DD` strings. Event timestamps are written as Firestore `Timestamp` values and converted back to ISO strings at the repository boundary. Existing stable IDs and arrays are preserved during the one-time local-data import.
 
@@ -94,3 +95,22 @@ Firebase Hosting remains configured to serve `dist` with SPA rewrites. Build bef
 npm run build
 firebase deploy --only hosting --project nebulous-project--tracker
 ```
+
+## Web push notifications
+
+The PWA registers notifications only after the signed-in user taps **Enable notifications**. Each browser installation is stored in `notificationDevices` against the existing stable application user ID and current Authentication UID, so a user may enable several devices. Signing out removes that browser's registration. The generated `firebase-messaging-sw.js` uses the same build-time Firebase web configuration as the application; no `.env` file or Admin SDK credential is committed.
+
+Cloud Functions send only these two notification types:
+
+- a new employee help request at `level: "lead"` → that project's `leadId`
+- a project-lead escalation (created directly or transitioned to `level: "principal"` and `status: "Escalated"`) → that project's `principalId` and `principalIds`
+
+Before the first Functions deployment:
+
+1. Upgrade the Firebase project to the Blaze plan if it is not already billing-enabled.
+2. In **Firebase Console → Project settings → Cloud Messaging → Web configuration**, confirm the Web Push certificate public key matches the key configured in `notificationService.ts`.
+3. Confirm both the **Firebase Cloud Messaging API (V1)** and **FCM Registration API** are enabled in the linked Google Cloud project. New Firebase projects normally enable the registration API automatically.
+4. Install and verify the server package locally with `npm --prefix functions install` and `npm --prefix functions test`.
+5. Deploy the server and device-registration rules without deploying Hosting: `firebase deploy --only functions,firestore:rules --project nebulous-project--tracker`.
+
+On iPhone, web push requires the HTTPS site to be added to the Home Screen. Open the installed PWA, sign in, and tap **Enable notifications** from that installed app. No APNs key, native iOS bundle, or service-account key is added to the frontend.

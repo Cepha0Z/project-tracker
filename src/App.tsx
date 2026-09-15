@@ -17,6 +17,8 @@ import { Avatar, Empty, formatTime, minutesLabel, Modal, Progress, SectionTitle,
 import { CompactProjects, EmployeeWorkspace, ProjectWorkspace, SimplePeople, SimpleReports } from './components/phase4';
 import { authService } from './firebase/authService';
 import { localDateKey, projectAttention, projectHealth, projectWorkItems, workItemAssigneeIds } from './domain/selectors';
+import { NotificationControl } from './components/NotificationControl';
+import { notificationService, type ForegroundNotification } from './services/notificationService';
 
 type Page='home'|'projects'|'project'|'work'|'people'|'reports';
 type Mutate=(fn:(data:AppData)=>AppData)=>void;
@@ -30,17 +32,22 @@ const itemMinutes=(data:AppData,id:string)=>data.timeEntries.filter(t=>t.workIte
 const projectProgress=(data:AppData,p:Project)=>{const items=activeItems(data,p);return items.length?Math.round(items.filter(w=>w.status==='Completed').length/items.length*100):0};
 
 export default function App(){
+  const initialTarget=new URLSearchParams(window.location.search);
   const [data,setData]=useState<AppData>(()=>repository.load());
   const [sessionUser,setSessionUser]=useState<User|null>(null);
   const [authReady,setAuthReady]=useState(false),[dataReady,setDataReady]=useState(false),[syncError,setSyncError]=useState('');
-  const [page,setPage]=useState<Page>('home');
-  const [projectId,setProjectId]=useState('villa-60');
+  const [page,setPage]=useState<Page>(()=>initialTarget.has('project')?'project':'home');
+  const [projectId,setProjectId]=useState(()=>initialTarget.get('project')||'villa-60');
+  const [targetWorkItemId,setTargetWorkItemId]=useState<string|undefined>(()=>initialTarget.get('workItem')||undefined);
+  const [foregroundNotification,setForegroundNotification]=useState<ForegroundNotification|null>(null);
   const [menuOpen,setMenuOpen]=useState(false);
   useEffect(()=>{let stopData:()=>void=()=>undefined;const stopAuth=authService.subscribe(profile=>{stopData();setSessionUser(profile);setAuthReady(true);setSyncError('');if(profile){setDataReady(false);stopData=repository.subscribe(next=>{setData(next);setDataReady(true)},error=>{setSyncError(error.message);setDataReady(true)})}else setDataReady(false)},message=>{setSyncError(message);setAuthReady(true)});return()=>{stopData();stopAuth()}},[]);
+  useEffect(()=>{let stop:()=>void=()=>undefined;notificationService.subscribeForeground(setForegroundNotification).then(unsubscribe=>{stop=unsubscribe});return()=>stop()},[]);
   const user=data.users.find(u=>u.id===sessionUser?.id)||sessionUser;
   const mutate:Mutate=fn=>{const before=data,next=fn(before);if(next===before)return;setData(next);repository.save(next,before).catch(error=>{setSyncError(error instanceof Error?error.message:'Unable to save changes.');setData(before)})};
   const navigate=(next:Page)=>{setPage(next);setMenuOpen(false)};
-  const openProject=(id:string)=>{setProjectId(id);navigate('project')};
+  const openProject=(id:string)=>{setProjectId(id);setTargetWorkItemId(undefined);navigate('project')};
+  const openNotification=()=>{if(!foregroundNotification)return;const target=new URL(foregroundNotification.url,window.location.origin),linkedProject=target.searchParams.get('project');if(linkedProject){setProjectId(linkedProject);setTargetWorkItemId(target.searchParams.get('workItem')||undefined);navigate('project')}setForegroundNotification(null)};
   if(!authReady)return <div className="firebase-loading"><span/><strong>Connecting to Studio Projects…</strong></div>;
   if(!user)return <Login externalError={syncError}/>;
   if(!dataReady)return <div className="firebase-loading"><span/><strong>Loading your workspace…</strong></div>;
@@ -52,16 +59,17 @@ export default function App(){
       <div className="brand"><span className="brand-mark"><Building2 size={20}/></span><div><strong>STUDIO</strong><small>PROJECTS</small></div></div>
       <button className="mobile-close" onClick={()=>setMenuOpen(false)} aria-label="Close menu"><X/></button>
       <nav>{nav.map(([key,label,Icon])=><button key={String(key)} className={page===key||(key==='projects'&&page==='project')?'active':''} onClick={()=>navigate(key as Page)}><Icon size={19}/><span>{String(label)}</span></button>)}</nav>
-      <div className="sidebar-foot"><div className="profile-switch"><Avatar user={user} size="sm"/><span><strong>{user.name.split(' ')[0]}</strong><small>{isPrincipal?'Principal':data.projects.some(p=>p.leadId===user.id)?'Project Lead':user.title}</small></span></div><button className="logout" onClick={()=>authService.signOut()}><LogOut size={17}/> Sign out</button></div>
+      <div className="sidebar-foot"><NotificationControl user={user}/><div className="profile-switch"><Avatar user={user} size="sm"/><span><strong>{user.name.split(' ')[0]}</strong><small>{isPrincipal?'Principal':data.projects.some(p=>p.leadId===user.id)?'Project Lead':user.title}</small></span></div><button className="logout" onClick={async()=>{await notificationService.disable();await authService.signOut()}}><LogOut size={17}/> Sign out</button></div>
     </aside>
     <div className="main-shell">
       <header className={`topbar ${isPrincipal&&page==='home'?'boss-topbar':''}`}><button className="menu-button" onClick={()=>setMenuOpen(true)} aria-label="Open menu"><Menu/></button>{isPrincipal&&page==='home'?<div className="boss-date">{new Date().toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div>:<div className="crumb"><span>Studio Projects</span><b>/</b><strong>{page==='project'?data.projects.find(p=>p.id===projectId)?.name:String(nav.find(n=>n[0]===page)?.[1]??'')}</strong></div>}<div className="top-actions">{!(isPrincipal&&page==='home')&&<button className="icon-button" onClick={()=>navigate('projects')} aria-label="Search projects"><Search size={18}/></button>}<button className="icon-button notification" onClick={()=>navigate('home')} aria-label="Open attention queue"><Bell size={20}/>{data.helpRequests.some(h=>h.assignedTo===user.id&&h.status!=='Resolved')&&<span/>}</button><Avatar user={user}/>{isPrincipal&&page==='home'&&<span className="boss-user"><strong>{user.name.split(' ')[0]}</strong><small>Principal</small></span>}</div></header>
       <main>
         {syncError&&<div className="sync-error"><AlertCircle size={16}/>{syncError}</div>}
+        {foregroundNotification&&<button className="foreground-notification" onClick={openNotification}><Bell size={17}/><span><strong>{foregroundNotification.title}</strong><small>{foregroundNotification.body}</small></span><ArrowRight size={15}/></button>}
         {!data.projects.length&&isPrincipal?<FirebaseSetup data={data} onError={setSyncError}/>:<>
         {page==='home'&&(isPrincipal?<PrincipalHome data={data} user={user} openProject={openProject} mutate={mutate}/>:<EmployeeWorkspace data={data} user={user} openProject={openProject} mutate={mutate}/>)}
         {page==='projects'&&<CompactProjects data={data} user={user} openProject={openProject} mutate={mutate}/>} 
-        {page==='project'&&<ProjectWorkspace data={data} user={user} projectId={projectId} back={()=>navigate('projects')} mutate={mutate}/>} 
+        {page==='project'&&<ProjectWorkspace data={data} user={user} projectId={projectId} initialWorkItemId={targetWorkItemId} back={()=>navigate('projects')} mutate={mutate}/>}
         {page==='work'&&<EmployeeWorkspace data={data} user={user} openProject={openProject} mutate={mutate} showAll/>} 
         {page==='people'&&<SimplePeople data={data} user={user} mutate={mutate}/>} 
         {page==='reports'&&<SimpleReports data={data} user={user}/>}</>}

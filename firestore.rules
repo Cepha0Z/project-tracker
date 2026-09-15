@@ -43,9 +43,50 @@ service cloud.firestore {
       return isAdmin() || futureProject(projectId).leadId == userId();
     }
 
+    function ownsNotificationDevice(device) {
+      return activeUser()
+        && device.userId == userId()
+        && device.authUid == request.auth.uid;
+    }
+
+    function validNotificationDevicePath(deviceId, device) {
+      return deviceId == request.auth.uid + '_' + device.installationId;
+    }
+
     match /authProfiles/{uid} {
       allow read: if activeUser() && (request.auth.uid == uid || isAdmin());
       allow write: if false;
+    }
+
+    match /notificationDevices/{deviceId} {
+      // registerDevice() checks this exact UID-prefixed document before creating it.
+      // Collection listing is unnecessary for clients; Cloud Functions use Admin SDK.
+      allow get: if activeUser()
+        && deviceId.matches(request.auth.uid + '_.*');
+      allow list: if false;
+      allow create: if ownsNotificationDevice(request.resource.data)
+        && validNotificationDevicePath(deviceId, request.resource.data)
+        && request.resource.data.enabled == true
+        && request.resource.data.keys().hasAll([
+          'userId', 'authUid', 'installationId', 'token', 'platform',
+          'browser', 'enabled', 'createdAt', 'lastSeenAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'userId', 'authUid', 'installationId', 'token', 'platform',
+          'browser', 'enabled', 'createdAt', 'lastSeenAt'
+        ]);
+      allow update: if ownsNotificationDevice(resource.data)
+        && ownsNotificationDevice(request.resource.data)
+        && validNotificationDevicePath(deviceId, resource.data)
+        && validNotificationDevicePath(deviceId, request.resource.data)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.authUid == resource.data.authUid
+        && request.resource.data.installationId == resource.data.installationId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'token', 'platform', 'browser', 'enabled', 'lastSeenAt'
+        ]);
+      allow delete: if ownsNotificationDevice(resource.data)
+        && validNotificationDevicePath(deviceId, resource.data);
     }
 
     match /users/{id} {
@@ -109,8 +150,41 @@ service cloud.firestore {
 
     match /helpRequests/{id} {
       allow read: if activeUser();
-      allow create: if activeUser() && request.resource.data.raisedBy == userId();
-      allow update: if activeUser() && (isAdmin() || project(resource.data.projectId).leadId == userId());
+      allow create: if activeUser()
+        && request.resource.data.raisedBy == userId()
+        && isProjectMember(request.resource.data.projectId)
+        && (
+          (
+            project(request.resource.data.projectId).leadId != userId()
+            && request.resource.data.level == 'lead'
+            && request.resource.data.status == 'Open'
+            && request.resource.data.assignedTo == project(request.resource.data.projectId).leadId
+          )
+          || (
+            project(request.resource.data.projectId).leadId == userId()
+            && request.resource.data.level == 'principal'
+            && request.resource.data.status == 'Escalated'
+            && request.resource.data.assignedTo == project(request.resource.data.projectId).principalId
+            && request.resource.data.escalatedBy == userId()
+          )
+        );
+      allow update: if activeUser()
+        && (isAdmin() || project(resource.data.projectId).leadId == userId())
+        && request.resource.data.projectId == resource.data.projectId
+        && request.resource.data.workItemId == resource.data.workItemId
+        && request.resource.data.raisedBy == resource.data.raisedBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && (
+          request.resource.data.level == resource.data.level
+          || (
+            project(resource.data.projectId).leadId == userId()
+            && resource.data.level == 'lead'
+            && request.resource.data.level == 'principal'
+            && request.resource.data.status == 'Escalated'
+            && request.resource.data.assignedTo == project(resource.data.projectId).principalId
+            && request.resource.data.escalatedBy == userId()
+          )
+        );
       allow delete: if isAdmin();
     }
 

@@ -9,13 +9,33 @@ const VAPID_PUBLIC_KEY='BMMIIMECa4Nkm0cg7JbvQi69t9va9efxSN1qhGwes0iWX8PDJIQz_F8T
 export type NotificationRegistrationState='checking'|'available'|'enabled'|'denied'|'unavailable';
 export type ForegroundNotification={title:string;body:string;url:string};
 
-const ios=()=>/iPad|iPhone|iPod/.test(navigator.userAgent);
+const ios=()=>/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 const standalone=()=>window.matchMedia('(display-mode: standalone)').matches||Boolean((navigator as Navigator&{standalone?:boolean}).standalone);
 const platform=()=>ios()?'iOS':/Android/.test(navigator.userAgent)?'Android':'Desktop';
 const browser=()=>/CriOS|Chrome/.test(navigator.userAgent)?'Chrome':/FxiOS|Firefox/.test(navigator.userAgent)?'Firefox':/Safari/.test(navigator.userAgent)?'Safari':'Browser';
 
+function iosWebPushVersion(){
+  const match=navigator.userAgent.match(/(?:CPU (?:iPhone )?OS|iPhone OS) (\d+)[._](\d+)/);
+  if(!match)return navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1;
+  const major=Number(match[1]),minor=Number(match[2]);
+  return major>16||(major===16&&minor>=4);
+}
+
+function webPushApisAvailable(){
+  return Boolean(firebaseApp&&firebaseAuth&&firestoreDb&&window.isSecureContext&&'Notification' in window&&'serviceWorker' in navigator&&'PushManager' in window&&'fetch' in window);
+}
+
 async function supported(){
-  return Boolean(firebaseApp&&firebaseAuth&&firestoreDb&&window.isSecureContext&&'Notification' in window&&'serviceWorker' in navigator&&await isSupported());
+  if(!webPushApisAvailable())return false;
+  // iOS/iPadOS Web Push is available only to installed Home Screen apps from 16.4.
+  // Do not use Firebase's broader asynchronous preflight as the render gate here:
+  // its IndexedDB probe can return a false negative before the user's permission gesture.
+  if(ios())return standalone()&&iosWebPushVersion();
+  return isSupported();
+}
+
+async function firebaseMessagingSupported(){
+  return webPushApisAvailable()&&await isSupported();
 }
 
 async function registerDevice(user:User){
@@ -71,7 +91,7 @@ export const notificationService={
     if(await supported())await deleteToken(getMessaging(firebaseApp)).catch(()=>undefined);
   },
   async subscribeForeground(listener:(notification:ForegroundNotification)=>void){
-    if(!firebaseApp||!await supported())return ()=>undefined;
+    if(!firebaseApp||!await firebaseMessagingSupported())return ()=>undefined;
     return onMessage(getMessaging(firebaseApp),(payload:MessagePayload)=>listener({
       title:payload.data?.title||payload.notification?.title||'Studio Projects',
       body:payload.data?.body||payload.notification?.body||'A project needs your attention.',

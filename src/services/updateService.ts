@@ -2,6 +2,7 @@ import type { AppData, DailyUpdate, WorkStatus } from '../types';
 import { makeId, now, withActivity } from './shared';
 import { permissions } from '../permissions/permissions';
 import { workItemService } from './workItemService';
+import { localDateKey } from '../domain/selectors';
 
 export const updateService = {
   createReport(data:AppData, actorId:string, input:{summary:string;entries:{workItemId:string;progress:number;minutes?:number;status:WorkStatus;note?:string;blocker?:string}[]}):AppData {
@@ -11,12 +12,12 @@ export const updateService = {
       const item=next.workItems.find(w=>w.id===entry.workItemId); if(!item||!permissions.canUpdateOwnWork(actor,item))continue;
       const project=next.projects.find(p=>p.id===item.projectId),cycle=next.cycles.find(c=>c.id===project?.activeCycleId&&c.deliverableIds?.includes(item.id)); const updateId=makeId('update'); updateIds.push(updateId);projectIds.add(item.projectId);
       const previousProgress=item.progress,progress=entry.status==='Completed'?100:entry.progress,progressDelta=progress-previousProgress;
-      const update:DailyUpdate={id:updateId,reportId,projectId:item.projectId,workItemId:item.id,userId:actorId,text:entry.note||input.summary,progress,previousProgress,progressDelta,minutes:0,status:entry.status,blocker:entry.blocker,createdAt,cycleId:cycle?.id};
+      const update:DailyUpdate={id:updateId,reportId,projectId:item.projectId,workItemId:item.id,userId:actorId,text:entry.note||input.summary,progress,previousProgress,progressDelta,minutes:0,status:entry.status,blocker:entry.blocker,createdAt,cycleId:item.cycleId||cycle?.id};
       next=workItemService.update(next,actorId,item.id,{progress,status:entry.status,blockedReason:entry.blocker});
       next={...next,updates:[update,...next.updates]};
     }
     if(!updateIds.length)return data;
-    next={...next,dailyReports:[{id:reportId,userId:actorId,date:createdAt.slice(0,10),summary:input.summary,createdAt,updateIds,items:input.entries.map(entry=>{const item=data.workItems.find(w=>w.id===entry.workItemId)!;const newProgress=entry.status==='Completed'?100:entry.progress;return {workItemId:entry.workItemId,previousProgress:item.progress,newProgress,progressDelta:newProgress-item.progress,status:entry.status}})},...(next.dailyReports||[])]};
+    next={...next,dailyReports:[{id:reportId,userId:actorId,date:localDateKey(new Date(createdAt)),summary:input.summary,createdAt,updateIds,items:input.entries.map(entry=>{const item=data.workItems.find(w=>w.id===entry.workItemId)!;const newProgress=entry.status==='Completed'?100:entry.progress;return {workItemId:entry.workItemId,previousProgress:item.progress,newProgress,progressDelta:newProgress-item.progress,status:entry.status}})},...(next.dailyReports||[])]};
     for(const projectId of projectIds)next=withActivity(next,projectId,actorId,`submitted today's report covering ${input.entries.filter(e=>next.workItems.find(w=>w.id===e.workItemId)?.projectId===projectId).length} deliverable(s)`,createdAt);
     return next;
   },

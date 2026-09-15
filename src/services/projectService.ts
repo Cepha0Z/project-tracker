@@ -7,7 +7,7 @@ export const projectService = {
     const actor=data.users.find(u=>u.id===actorId); if(!actor||!permissions.canCreateProject(actor)) return data;
     const id=makeId('project');
     const teamIds=[...new Set([input.leadId,actorId])];
-    const project:Project={id,name:input.name.trim(),location:input.location?.trim()||'',code:input.name.trim().split(/\s+/).map(x=>x[0]).join('').slice(0,4).toUpperCase(),description:input.description||'',focus:'Brief and project planning',principalId:input.principalId,leadId:input.leadId,teamIds,currentStage:'Brief',deadline:input.deadline||'',deadlineLabel:'—',health:'On Track',stages:['Brief','Concept Design','Design Development','Documentation','Production','Procurement','Site Stage'].map((name,i)=>({name,state:i===0?'current':'next'})),cycle:{label:'Not planned',direction:'Awaiting project planning.',deadline:'Not set'},notes:[]};
+    const project:Project={id,name:input.name.trim(),location:input.location?.trim()||'',code:input.name.trim().split(/\s+/).map(x=>x[0]).join('').slice(0,4).toUpperCase(),description:input.description||'',focus:'Brief and project planning',principalId:input.principalId,leadId:input.leadId,teamIds,currentStage:'Brief',deadline:input.deadline||'',deadlineLabel:'—',health:'On Track',stages:['Brief','Concept Design','Design Development','Documentation','Production','Procurement','Site Stage'].map((name,i)=>({name,state:i===0?'current':'next'})),cycle:{label:'Not planned',direction:'Awaiting project planning.',deadline:'Not set'},notes:[],createdBy:actorId,createdAt:now()};
     return withActivity({...data,projects:[...data.projects,project]},id,actorId,`created project ${project.name}`);
   },
   update(data:AppData, actorId:string, projectId:string, changes:Partial<Project>):AppData {

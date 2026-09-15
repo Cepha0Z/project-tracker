@@ -1,0 +1,137 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function profilePath() {
+      return /databases/$(database)/documents/authProfiles/$(request.auth.uid);
+    }
+
+    function activeUser() {
+      return signedIn() && exists(profilePath()) && get(profilePath()).data.active == true;
+    }
+
+    function userId() {
+      return get(profilePath()).data.userId;
+    }
+
+    function isAdmin() {
+      return activeUser() && get(profilePath()).data.access == 'admin';
+    }
+
+    function project(projectId) {
+      return get(/databases/$(database)/documents/projects/$(projectId)).data;
+    }
+
+    function futureProject(projectId) {
+      return getAfter(/databases/$(database)/documents/projects/$(projectId)).data;
+    }
+
+    function isProjectMember(projectId) {
+      return isAdmin() || project(projectId).principalId == userId()
+        || project(projectId).leadId == userId()
+        || project(projectId).teamIds.hasAny([userId()]);
+    }
+
+    function canManageProject(projectId) {
+      return isAdmin() || project(projectId).leadId == userId();
+    }
+
+    function canManageFutureProject(projectId) {
+      return isAdmin() || futureProject(projectId).leadId == userId();
+    }
+
+    match /authProfiles/{uid} {
+      allow read: if activeUser() && (request.auth.uid == uid || isAdmin());
+      allow write: if false;
+    }
+
+    match /users/{id} {
+      allow read: if activeUser();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /projects/{id} {
+      allow read: if activeUser();
+      allow create: if activeUser() && (isAdmin() || (
+        request.resource.data.createdBy == userId()
+        && request.resource.data.teamIds.hasAny([userId()])
+      ));
+      allow update: if canManageProject(id);
+      allow delete: if isAdmin();
+    }
+
+    match /workItems/{id} {
+      allow read: if activeUser();
+      allow create: if activeUser() && canManageFutureProject(request.resource.data.projectId);
+      allow update: if activeUser() && (
+        canManageProject(resource.data.projectId)
+        || (
+          resource.data.assigneeIds.hasAny([userId()])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'name', 'dueDate', 'dueLabel', 'scopeNotes', 'notes', 'status',
+            'progress', 'blockedReason', 'startedAt', 'completedAt',
+            'activeElapsedMinutes', 'previousProgress', 'updatedAt'
+          ])
+          && request.resource.data.assigneeIds == resource.data.assigneeIds
+          && request.resource.data.projectId == resource.data.projectId
+          && request.resource.data.stageId == resource.data.stageId
+          && request.resource.data.cycleId == resource.data.cycleId
+        )
+        || (
+          isProjectMember(resource.data.projectId)
+          && resource.data.status == 'Blocked'
+          && request.resource.data.status == 'In Progress'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'blockedReason', 'startedAt', 'updatedAt'
+          ])
+        )
+      );
+      allow delete: if activeUser() && canManageProject(resource.data.projectId);
+    }
+
+    match /dailyUpdates/{id} {
+      allow read: if activeUser();
+      allow create: if activeUser() && request.resource.data.userId == userId();
+      allow update: if activeUser() && resource.data.userId == userId()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text']);
+      allow delete: if isAdmin();
+    }
+
+    match /dailyReports/{id} {
+      allow read: if activeUser();
+      allow create: if activeUser() && request.resource.data.userId == userId();
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /helpRequests/{id} {
+      allow read: if activeUser();
+      allow create: if activeUser() && request.resource.data.raisedBy == userId();
+      allow update: if activeUser() && (isAdmin() || project(resource.data.projectId).leadId == userId());
+      allow delete: if isAdmin();
+    }
+
+    match /activity/{id} {
+      allow read: if activeUser();
+      allow create: if activeUser() && request.resource.data.actorId == userId();
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /cycles/{id} {
+      allow read: if activeUser();
+      allow create: if activeUser() && canManageFutureProject(request.resource.data.projectId);
+      allow update, delete: if activeUser() && canManageProject(resource.data.projectId);
+    }
+
+    match /timeEntries/{id} {
+      allow read: if activeUser();
+      allow create: if activeUser() && request.resource.data.userId == userId();
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+  }
+}

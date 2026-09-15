@@ -13,6 +13,9 @@ export interface User {
   tone: string;
   reportsToId?: string;
   loginEnabled?: boolean;
+  email?: string;
+  authUid?: string;
+  active?: boolean;
 }
 
 export interface Stage { name: string; state: 'done' | 'current' | 'next' }
@@ -127,6 +130,8 @@ export interface Project {
   cycle: { label: string; direction: string; deadline: string };
   notes: string[];
   activeCycleId?: string;
+  createdBy?: string;
+  createdAt?: string;
 }
 
 export interface Cycle {

@@ -92,6 +92,7 @@ export interface HelpRequest {
   kind?: 'question' | 'blocked';
   escalatedBy?: string;
   escalatedAt?: string;
+  escalationNote?: string;
   response?: string;
   respondedBy?: string;
   respondedAt?: string;

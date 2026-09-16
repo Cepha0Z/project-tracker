@@ -128,32 +128,45 @@ service cloud.firestore {
       allow create: if activeUser() && (isAdmin() || (
         request.resource.data.createdBy == userId()
         && request.resource.data.teamIds.hasAny([userId()])
-      ));
-      allow update: if canManageProject(id);
+      )) && request.resource.data.teamIds.hasAny([request.resource.data.leadId]);
+      allow update: if canManageProject(id)
+        && request.resource.data.teamIds.hasAny([request.resource.data.leadId]);
       allow delete: if isAdmin();
     }
 
     match /workItems/{id} {
       allow read: if activeUser();
-      allow create: if activeUser() && canManageFutureProject(request.resource.data.projectId);
-      allow update: if activeUser() && (
-        canManageProject(resource.data.projectId)
+      allow create: if activeUser() && canManageFutureProject(request.resource.data.projectId)
+        && futureProject(request.resource.data.projectId).teamIds.hasAll(request.resource.data.assigneeIds)
+        && request.resource.data.assigneeIds.hasAny([request.resource.data.assigneeId]);
+      allow update: if activeUser()
+        && request.resource.data.projectId == resource.data.projectId
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['assigneeId', 'assigneeIds'])
+          || (
+            project(resource.data.projectId).teamIds.hasAny([request.resource.data.assigneeId])
+            && (
+              !request.resource.data.keys().hasAny(['assigneeIds'])
+              || project(resource.data.projectId).teamIds.hasAll(request.resource.data.assigneeIds)
+            )
+          )
+        )
+        && (
+        (canManageProject(resource.data.projectId) && resource.data.status != 'Blocked')
         || (
-          resource.data.assigneeIds.hasAny([userId()])
+          isWorkItemAssignee(id)
+          && resource.data.status != 'Blocked'
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'name', 'dueDate', 'dueLabel', 'scopeNotes', 'notes', 'status',
             'progress', 'blockedReason', 'startedAt', 'completedAt',
             'activeElapsedMinutes', 'previousProgress', 'updatedAt'
           ])
-          && request.resource.data.assigneeIds == resource.data.assigneeIds
-          && request.resource.data.projectId == resource.data.projectId
-          && request.resource.data.stageId == resource.data.stageId
-          && request.resource.data.cycleId == resource.data.cycleId
         )
         || (
-          isProjectMember(resource.data.projectId)
+          isProjectPrincipal(resource.data.projectId)
           && resource.data.status == 'Blocked'
           && request.resource.data.status == 'In Progress'
+          && request.resource.data.progress == resource.data.progress
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'status', 'blockedReason', 'startedAt', 'updatedAt'
           ])
@@ -184,6 +197,12 @@ service cloud.firestore {
         && isProjectMember(request.resource.data.projectId)
         && request.resource.data.projectId == workItem(request.resource.data.workItemId).projectId
         && isWorkItemAssignee(request.resource.data.workItemId)
+        && workItem(request.resource.data.workItemId).status != 'Completed'
+        && (!(workItem(request.resource.data.workItemId).keys().hasAny(['archived']))
+          || workItem(request.resource.data.workItemId).archived == false)
+        && request.resource.data.kind in ['question', 'blocked']
+        && (request.resource.data.kind != 'blocked'
+          || getAfter(/databases/$(database)/documents/workItems/$(request.resource.data.workItemId)).data.status == 'Blocked')
         && request.resource.data.id == id
         && request.resource.data.level == 'lead'
         && request.resource.data.status == 'Open'
@@ -212,7 +231,7 @@ service cloud.firestore {
             ])
           )
           || (
-            project(resource.data.projectId).leadId == userId()
+            (project(resource.data.projectId).leadId == userId() || isWorkItemAssignee(resource.data.workItemId))
             && resource.data.level == 'lead'
             && resource.data.status in ['Open', 'Responded']
             && request.resource.data.level == 'principal'
@@ -220,19 +239,21 @@ service cloud.firestore {
             && request.resource.data.assignedTo == project(resource.data.projectId).principalId
             && request.resource.data.escalatedBy == userId()
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'level', 'assignedTo', 'reason', 'tried', 'decisionNeeded',
-              'priority', 'status', 'escalatedBy', 'escalatedAt'
+              'level', 'assignedTo', 'escalationNote', 'status', 'escalatedBy', 'escalatedAt'
             ])
           )
           || (
-            project(resource.data.projectId).leadId == userId()
+            isProjectPrincipal(resource.data.projectId)
             && resource.data.level == 'lead'
             && resource.data.status != 'Resolved'
             && request.resource.data.level == 'lead'
             && request.resource.data.status == 'Resolved'
             && request.resource.data.resolvedBy == userId()
+            && request.resource.data.resolutionNote is string
+            && request.resource.data.resolutionNote.size() > 0
+            && request.resource.data.response == request.resource.data.resolutionNote
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'status', 'resolutionNote', 'resolvedBy', 'resolvedAt'
+              'status', 'response', 'resolutionNote', 'resolvedBy', 'resolvedAt'
             ])
           )
           || (
@@ -263,8 +284,11 @@ service cloud.firestore {
             && request.resource.data.level == 'principal'
             && request.resource.data.status == 'Resolved'
             && request.resource.data.resolvedBy == userId()
+            && request.resource.data.resolutionNote is string
+            && request.resource.data.resolutionNote.size() > 0
+            && request.resource.data.response == request.resource.data.resolutionNote
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'status', 'resolutionNote', 'resolvedBy', 'resolvedAt'
+              'status', 'response', 'resolutionNote', 'resolvedBy', 'resolvedAt'
             ])
           )
         );

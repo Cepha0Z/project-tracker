@@ -397,7 +397,7 @@ async function sendHelpNotification(request, env) {
   }
   const requestId = typeof input?.requestId === "string" ? input.requestId : "";
   const event = input?.event;
-  if (!requestId || !["help_created", "help_escalated"].includes(event)) {
+  if (!requestId || !["help_escalated", "help_resolved"].includes(event)) {
     return jsonResponse(request, { success: false, error: "Invalid request." }, 400);
   }
 
@@ -416,61 +416,43 @@ async function sendHelpNotification(request, env) {
 
     let recipients;
     let content;
-    if (event === "help_created") {
-      const valid =
-        helpRequest.level === "lead" &&
-        helpRequest.status === "Open" &&
-        helpRequest.raisedBy === profile.userId &&
-        helpRequest.assignedTo === project.leadId &&
-        workItemAssignees(item).includes(profile.userId);
-      if (!valid) return jsonResponse(request, { success: false, error: "Forbidden." }, 403);
-
-      const unresolved = (await queryDocuments(
-        env,
-        accessToken,
-        "helpRequests",
-        "workItemId",
-        helpRequest.workItemId
-      )).filter(candidate => candidate.status !== "Resolved");
-      if (unresolved.some(candidate => candidate.id !== requestId)) {
-        return jsonResponse(request, { success: false, error: "An unresolved request already exists." }, 409);
-      }
-
-      recipients = [project.leadId];
-      const note = shortMessage(helpRequest.reason);
-      content = {
-        title: "Studio Projects",
-        body: [
-          `${requester.name || "A team member"} needs help`,
-          `${project.name} — ${item.name}`,
-          note
-        ].filter(Boolean).join("\n"),
-        url: `${APP_URL}/?project=${encodeURIComponent(project.id)}&workItem=${encodeURIComponent(item.id)}`,
-        tag: `help-${requestId}`
-      };
-    } else {
+    if (event === "help_escalated") {
       const principals = userIdsForProjectPrincipals(project);
       const valid =
         helpRequest.level === "principal" &&
         helpRequest.status === "Escalated" &&
-        profile.userId === project.leadId &&
+        (profile.userId === project.leadId || workItemAssignees(item).includes(profile.userId)) &&
         helpRequest.escalatedBy === profile.userId &&
         principals.includes(helpRequest.assignedTo);
       if (!valid) return jsonResponse(request, { success: false, error: "Forbidden." }, 403);
 
       recipients = principals;
-      const lead = await getDocument(env, accessToken, "users", profile.userId);
+      const escalator = await getDocument(env, accessToken, "users", profile.userId);
       const note = shortMessage(helpRequest.reason);
       content = {
         title: "Studio Projects",
         body: [
           "Help request escalated",
           `${project.name} — ${item.name}`,
-          `${lead?.name || "The Project Lead"} needs your attention`,
-          note
+          `${escalator?.name || "A team member"} needs your attention`,
+          shortMessage(helpRequest.escalationNote || helpRequest.reason)
         ].filter(Boolean).join("\n"),
-        url: `${APP_URL}/?project=${encodeURIComponent(project.id)}&workItem=${encodeURIComponent(item.id)}`,
+        url: `${APP_URL}/?project=${encodeURIComponent(project.id)}&workItem=${encodeURIComponent(item.id)}&help=${encodeURIComponent(requestId)}`,
         tag: `escalation-${requestId}`
+      };
+    } else {
+      const principals = userIdsForProjectPrincipals(project);
+      const valid = helpRequest.status === "Resolved" && helpRequest.resolvedBy === profile.userId &&
+        (profile.access === "admin" || principals.includes(profile.userId)) &&
+        typeof helpRequest.resolutionNote === "string" && helpRequest.resolutionNote.trim().length > 0;
+      if (!valid) return jsonResponse(request, { success: false, error: "Forbidden." }, 403);
+      const resolver = await getDocument(env, accessToken, "users", profile.userId);
+      recipients = [helpRequest.raisedBy];
+      content = {
+        title: "Studio Projects",
+        body: ["Your help request was resolved", `${project.name} — ${item.name}`, `${resolver?.name || "Principal"}: ${shortMessage(helpRequest.resolutionNote)}`].join("\n"),
+        url: `${APP_URL}/?project=${encodeURIComponent(project.id)}&workItem=${encodeURIComponent(item.id)}&help=${encodeURIComponent(requestId)}`,
+        tag: `resolution-${requestId}`
       };
     }
 

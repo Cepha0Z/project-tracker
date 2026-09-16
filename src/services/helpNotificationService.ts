@@ -3,14 +3,7 @@ import { firebaseAuth } from '../firebase/config';
 
 const ENDPOINT='https://morning-night-85ab.cephajj1.workers.dev/notifications/help';
 
-type HelpNotificationEvent='help_created'|'help_escalated';
-
-function createdRequests(before:AppData,after:AppData){
-  const existing=new Set(before.helpRequests.map(request=>request.id));
-  return after.helpRequests.filter(request=>
-    !existing.has(request.id)&&request.level==='lead'&&request.status==='Open',
-  );
-}
+type HelpNotificationEvent='help_escalated'|'help_resolved';
 
 function escalatedRequests(before:AppData,after:AppData){
   const previous=new Map(before.helpRequests.map(request=>[request.id,request]));
@@ -20,6 +13,11 @@ function escalatedRequests(before:AppData,after:AppData){
       old&&old.level!=='principal'&&request.level==='principal'&&request.status==='Escalated',
     );
   });
+}
+
+function resolvedRequests(before:AppData,after:AppData){
+  const previous=new Map(before.helpRequests.map(request=>[request.id,request]));
+  return after.helpRequests.filter(request=>previous.has(request.id)&&previous.get(request.id)?.status!=='Resolved'&&request.status==='Resolved');
 }
 
 async function dispatch(request:HelpRequest,event:HelpNotificationEvent){
@@ -37,8 +35,8 @@ async function dispatch(request:HelpRequest,event:HelpNotificationEvent){
 export const helpNotificationService={
   async dispatchChanges(before:AppData,after:AppData){
     const events:[HelpRequest,HelpNotificationEvent][]=[
-      ...createdRequests(before,after).map(request=>[request,'help_created'] as [HelpRequest,HelpNotificationEvent]),
       ...escalatedRequests(before,after).map(request=>[request,'help_escalated'] as [HelpRequest,HelpNotificationEvent]),
+      ...resolvedRequests(before,after).map(request=>[request,'help_resolved'] as [HelpRequest,HelpNotificationEvent]),
     ];
     await Promise.allSettled(events.map(([request,event])=>dispatch(request,event)));
   },

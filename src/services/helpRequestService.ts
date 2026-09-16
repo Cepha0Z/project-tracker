@@ -1,4 +1,4 @@
-import type { AppData, DecisionOutcome, Priority } from '../types';
+import type { AppData, DecisionOutcome } from '../types';
 import { makeId, now, withActivity } from './shared';
 import { permissions } from '../permissions/permissions';
 import { workItemService } from './workItemService';
@@ -9,7 +9,7 @@ export const helpRequestService = {
     if(!item)return data;
     const project=data.projects.find(candidate=>candidate.id===item.projectId);
     const actor=data.users.find(user=>user.id===actorId);
-    if(!project||!actor||!permissions.canUpdateOwnWork(actor,item))return data;
+    if(!project||!actor||item.archived||item.status==='Completed'||!project.teamIds.includes(actorId)||!permissions.canUpdateOwnWork(actor,item))return data;
     if(data.helpRequests.some(request=>request.workItemId===item.id&&request.status!=='Resolved'))return data;
 
     const stamp=now();
@@ -48,21 +48,19 @@ export const helpRequestService = {
     return withActivity(next,request.projectId,actorId,`responded to ${request.subject}`);
   },
 
-  escalate(data:AppData,actorId:string,requestId:string,input:{reason:string;tried:string;decision:string;priority:Priority}):AppData {
+  escalate(data:AppData,actorId:string,requestId:string,input:{note?:string}):AppData {
     const request=data.helpRequests.find(candidate=>candidate.id===requestId);
     if(!request)return data;
     const project=data.projects.find(candidate=>candidate.id===request.projectId);
     const actor=data.users.find(user=>user.id===actorId);
-    if(!project||!actor||!permissions.canEscalateToPrincipal(actor,project,request))return data;
+    const item=data.workItems.find(candidate=>candidate.id===request.workItemId);
+    if(!project||!actor||!permissions.canEscalateToPrincipal(actor,project,request,item))return data;
     const stamp=now();
     const next={...data,helpRequests:data.helpRequests.map(candidate=>candidate.id===requestId?{
       ...candidate,
       level:'principal' as const,
       assignedTo:project.principalId,
-      reason:input.reason.trim(),
-      tried:input.tried.trim(),
-      decisionNeeded:input.decision.trim(),
-      priority:input.priority,
+      ...(input.note?.trim()?{escalationNote:input.note.trim()}:{}),
       status:'Escalated' as const,
       escalatedBy:actorId,
       escalatedAt:stamp,
@@ -106,14 +104,15 @@ export const helpRequestService = {
     if(!request)return data;
     const project=data.projects.find(candidate=>candidate.id===request.projectId);
     const actor=data.users.find(user=>user.id===actorId);
-    if(!project||!actor||!permissions.canResolveRequest(actor,project,request))return data;
+    if(!project||!actor||!note.trim()||!permissions.canResolveRequest(actor,project,request))return data;
     const stamp=now();
     const next={
       ...data,
       helpRequests:data.helpRequests.map(candidate=>candidate.id===requestId?{
         ...candidate,
         status:'Resolved' as const,
-        resolutionNote:note.trim()||'Resolved.',
+        response:note.trim(),
+        resolutionNote:note.trim(),
         resolvedBy:actorId,
         resolvedAt:stamp,
       }:candidate),

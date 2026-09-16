@@ -43,3 +43,8 @@
 
 /* Web push notification controls */
 .notification-control{margin-bottom:11px}.notification-control>button{width:100%;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#e7ede9;display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:4px;text-align:left;font-size:10px;font-weight:700}.notification-control>button:not(:disabled):hover{background:rgba(255,255,255,.12)}.notification-control>button:disabled{cursor:default}.notification-control>small{display:block;color:#e7b9b2;font-size:8px;line-height:1.4;padding:6px 8px 0}.foreground-notification{position:fixed;right:22px;top:82px;z-index:30;width:min(390px,calc(100vw - 36px));border:1px solid #d5b2ac;border-left:4px solid #a83027;background:#fff9f7;box-shadow:0 14px 38px rgba(25,32,29,.18);padding:13px 14px;display:grid;grid-template-columns:22px 1fr 16px;align-items:center;gap:9px;text-align:left;color:#96382f}.foreground-notification span{display:flex;flex-direction:column;color:#26312b}.foreground-notification strong{font-size:12px}.foreground-notification small{font-size:10px;line-height:1.4;color:#6d746f;margin-top:3px}@media(max-width:600px){.foreground-notification{top:72px;right:12px;width:calc(100vw - 24px)}}
+
+/* iOS zooms focused form controls whose computed text size is below 16px. */
+@supports (-webkit-touch-callout: none){
+  input,textarea,select{font-size:16px!important}
+}

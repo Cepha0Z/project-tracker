@@ -266,11 +266,20 @@ const stringField = value => ({ stringValue: String(value) });
 const integerField = value => ({ integerValue: String(value) });
 const timestampField = () => ({ timestampValue: new Date().toISOString() });
 
-function userIdsForProjectPrincipals(project) {
-  return [...new Set([
-    project.principalId,
-    ...(Array.isArray(project.principalIds) ? project.principalIds : [])
-  ].filter(Boolean))];
+async function adminUserIds(env, accessToken) {
+  const candidates = await queryDocuments(env, accessToken, "authProfiles", "access", "admin");
+  const validated = await Promise.all(candidates.map(async profile => {
+    if (profile.active !== true || !profile.userId) return null;
+    const user = await getDocument(env, accessToken, "users", profile.userId);
+    return user?.authUid === profile.id && user?.access === "admin" && user?.active !== false && user?.loginEnabled !== false ? user.id : null;
+  }));
+  return validated.filter(Boolean);
+}
+
+function displayName(user) {
+  const local = typeof user?.email === "string" ? user.email.split("@")[0] : "";
+  const first = (local || user?.name || "Team member").replace(/[._-]+/g, " ").trim().split(/\s+/)[0];
+  return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
 }
 
 function workItemAssignees(item) {
@@ -372,6 +381,66 @@ async function notificationContext(env, accessToken, requestId) {
   return { helpRequest, project, item, requester };
 }
 
+async function sendDailyReportNotification(request, env, accessToken, profile, reportId) {
+  const report = await getDocument(env, accessToken, "dailyReports", reportId);
+  if (!report) return jsonResponse(request, { success: false, error: "Report not found." }, 404);
+  if (profile.access !== "employee" || report.userId !== profile.userId || !Array.isArray(report.updateIds) || !report.updateIds.length) {
+    return jsonResponse(request, { success: false, error: "Forbidden." }, 403);
+  }
+  const [update, author, recipients] = await Promise.all([
+    getDocument(env, accessToken, "dailyUpdates", report.updateIds[0]),
+    getDocument(env, accessToken, "users", report.userId),
+    adminUserIds(env, accessToken)
+  ]);
+  if (!update || update.reportId !== report.id || update.userId !== report.userId) {
+    return jsonResponse(request, { success: false, error: "Invalid report." }, 409);
+  }
+  const [item, project] = await Promise.all([
+    getDocument(env, accessToken, "workItems", update.workItemId),
+    getDocument(env, accessToken, "projects", update.projectId)
+  ]);
+  if (!item || !project || item.projectId !== project.id) {
+    return jsonResponse(request, { success: false, error: "Invalid report." }, 409);
+  }
+  const name = displayName(author);
+  const itemCount = report.updateIds.length;
+  const content = {
+    title: "Studio Projects",
+    body: [
+      `${name} submitted a daily report`,
+      `${project.name} — ${item.name}${itemCount > 1 ? ` +${itemCount - 1} more` : ""}`,
+      shortMessage(update.text || report.summary)
+    ].filter(Boolean).join("\n"),
+    url: `${APP_URL}/?project=${encodeURIComponent(project.id)}&workItem=${encodeURIComponent(item.id)}`,
+    tag: `daily-report-${reportId}`
+  };
+  const markerId = `${reportId}_daily_report_submitted`;
+  const created = await createDeliveryMarker(env, accessToken, markerId, {
+    reportId: stringField(reportId),
+    event: stringField("daily_report_submitted"),
+    actorId: stringField(profile.userId),
+    status: stringField("sending"),
+    createdAt: timestampField()
+  });
+  if (!created) return jsonResponse(request, { success: true, duplicate: true });
+  try {
+    const result = await sendToUsers(env, accessToken, recipients, content);
+    await updateDocumentFields(env, accessToken, "notificationDeliveries", markerId, {
+      status: stringField(result.failed ? "partial" : result.attempted ? "sent" : "no_devices"),
+      attempted: integerField(result.attempted),
+      delivered: integerField(result.delivered),
+      failed: integerField(result.failed),
+      completedAt: timestampField()
+    });
+    return jsonResponse(request, { success: true, ...result });
+  } catch {
+    await updateDocumentFields(env, accessToken, "notificationDeliveries", markerId, {
+      status: stringField("failed"), completedAt: timestampField()
+    }).catch(() => undefined);
+    return jsonResponse(request, { success: false, error: "Notification delivery failed." }, 502);
+  }
+}
+
 async function sendHelpNotification(request, env) {
   if (request.method === "OPTIONS") {
     const origin = request.headers.get("Origin") || "";
@@ -396,8 +465,9 @@ async function sendHelpNotification(request, env) {
     return jsonResponse(request, { success: false, error: "Invalid request." }, 400);
   }
   const requestId = typeof input?.requestId === "string" ? input.requestId : "";
+  const reportId = typeof input?.reportId === "string" ? input.reportId : "";
   const event = input?.event;
-  if (!requestId || !["help_escalated", "help_resolved"].includes(event)) {
+  if (!((requestId && ["help_escalated", "help_resolved"].includes(event)) || (reportId && event === "daily_report_submitted"))) {
     return jsonResponse(request, { success: false, error: "Invalid request." }, 400);
   }
 
@@ -407,6 +477,7 @@ async function sendHelpNotification(request, env) {
     if (!profile || profile.active !== true || typeof profile.userId !== "string") {
       return jsonResponse(request, { success: false, error: "Forbidden." }, 403);
     }
+    if (event === "daily_report_submitted") return sendDailyReportNotification(request, env, accessToken, profile, reportId);
     const context = await notificationContext(env, accessToken, requestId);
     if (!context) return jsonResponse(request, { success: false, error: "Request not found." }, 404);
     const { helpRequest, project, item, requester } = context;
@@ -417,40 +488,38 @@ async function sendHelpNotification(request, env) {
     let recipients;
     let content;
     if (event === "help_escalated") {
-      const principals = userIdsForProjectPrincipals(project);
+      const admins = await adminUserIds(env, accessToken);
       const valid =
         helpRequest.level === "principal" &&
         helpRequest.status === "Escalated" &&
-        (profile.userId === project.leadId || workItemAssignees(item).includes(profile.userId)) &&
+        profile.access === "employee" && workItemAssignees(item).includes(profile.userId) &&
         helpRequest.escalatedBy === profile.userId &&
-        principals.includes(helpRequest.assignedTo);
+        admins.includes(helpRequest.assignedTo);
       if (!valid) return jsonResponse(request, { success: false, error: "Forbidden." }, 403);
 
-      recipients = principals;
+      recipients = admins;
       const escalator = await getDocument(env, accessToken, "users", profile.userId);
-      const note = shortMessage(helpRequest.reason);
       content = {
         title: "Studio Projects",
         body: [
           "Help request escalated",
           `${project.name} — ${item.name}`,
-          `${escalator?.name || "A team member"} needs your attention`,
+          `${displayName(escalator)} needs your attention`,
           shortMessage(helpRequest.escalationNote || helpRequest.reason)
         ].filter(Boolean).join("\n"),
         url: `${APP_URL}/?project=${encodeURIComponent(project.id)}&workItem=${encodeURIComponent(item.id)}&help=${encodeURIComponent(requestId)}`,
         tag: `escalation-${requestId}`
       };
     } else {
-      const principals = userIdsForProjectPrincipals(project);
       const valid = helpRequest.status === "Resolved" && helpRequest.resolvedBy === profile.userId &&
-        (profile.access === "admin" || principals.includes(profile.userId)) &&
+        profile.access === "admin" &&
         typeof helpRequest.resolutionNote === "string" && helpRequest.resolutionNote.trim().length > 0;
       if (!valid) return jsonResponse(request, { success: false, error: "Forbidden." }, 403);
       const resolver = await getDocument(env, accessToken, "users", profile.userId);
       recipients = [helpRequest.raisedBy];
       content = {
         title: "Studio Projects",
-        body: ["Your help request was resolved", `${project.name} — ${item.name}`, `${resolver?.name || "Principal"}: ${shortMessage(helpRequest.resolutionNote)}`].join("\n"),
+        body: ["Your help request was resolved", `${project.name} — ${item.name}`, `${displayName(resolver)}: ${shortMessage(helpRequest.resolutionNote)}`].join("\n"),
         url: `${APP_URL}/?project=${encodeURIComponent(project.id)}&workItem=${encodeURIComponent(item.id)}&help=${encodeURIComponent(requestId)}`,
         tag: `resolution-${requestId}`
       };

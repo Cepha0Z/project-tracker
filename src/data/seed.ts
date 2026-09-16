@@ -2,11 +2,11 @@ import type { AppData } from '../types';
 
 export const seedData: AppData = {
   users: [
-    { id: 'kiran', name: 'Kiran Rao', initials: 'KR', title: 'Principal', access: 'admin', tone: '#20372f', loginEnabled:true },
-    { id: 'manoj', name: 'Manoj Shah', initials: 'MS', title: 'Principal', access: 'admin', tone: '#46566b', loginEnabled:true },
-    { id: 'sudiksha', name: 'Sudiksha Menon', initials: 'SM', title: 'Intermediate Architect', access: 'employee', tone: '#855d43', reportsToId:'kiran', loginEnabled:true },
-    { id: 'rahul', name: 'Rahul Desai', initials: 'RD', title: 'Intermediate Architect', access: 'employee', tone: '#71654b', reportsToId:'sudiksha', loginEnabled:true },
-    { id: 'siddharth', name: 'Siddharth Jain', initials: 'SJ', title: 'Junior Architect', access: 'employee', tone: '#5f6b61', reportsToId:'sudiksha', loginEnabled:true },
+    { id: 'kiran', name: 'Kiran', initials: 'K', title: 'Principal', access: 'admin', tone: '#20372f', loginEnabled:true },
+    { id: 'manoj', name: 'Manoj', initials: 'M', title: 'Principal', access: 'admin', tone: '#46566b', loginEnabled:true },
+    { id: 'sudiksha', name: 'Sudiksha', initials: 'S', title: 'Intermediate Architect', access: 'employee', tone: '#855d43', reportsToId:'kiran', loginEnabled:true },
+    { id: 'rahul', name: 'Rahul', initials: 'R', title: 'Intermediate Architect', access: 'employee', tone: '#71654b', reportsToId:'sudiksha', loginEnabled:true },
+    { id: 'siddharth', name: 'Siddharth', initials: 'S', title: 'Junior Architect', access: 'employee', tone: '#5f6b61', reportsToId:'sudiksha', loginEnabled:true },
   ],
   projects: [
     {

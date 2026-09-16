@@ -21,6 +21,16 @@ service cloud.firestore {
       return activeUser() && get(profilePath()).data.access == 'admin';
     }
 
+    function isLinkedAdminUser(id) {
+      let person = get(/databases/$(database)/documents/users/$(id)).data;
+      return person.access == 'admin'
+        && (!person.keys().hasAny(['active']) || person.active == true)
+        && person.authUid is string
+        && get(/databases/$(database)/documents/authProfiles/$(person.authUid)).data.userId == id
+        && get(/databases/$(database)/documents/authProfiles/$(person.authUid)).data.access == 'admin'
+        && get(/databases/$(database)/documents/authProfiles/$(person.authUid)).data.active == true;
+    }
+
     function project(projectId) {
       return get(/databases/$(database)/documents/projects/$(projectId)).data;
     }
@@ -61,6 +71,11 @@ service cloud.firestore {
           workItem(workItemId).keys().hasAny(['assigneeIds'])
           && workItem(workItemId).assigneeIds.hasAny([userId()])
         );
+    }
+
+    function existingAssignees(item) {
+      return item.keys().hasAny(['assigneeIds']) && item.assigneeIds.size() > 0
+        ? item.assigneeIds : [item.assigneeId];
     }
 
     function unchangedHelpIdentity() {
@@ -163,6 +178,18 @@ service cloud.firestore {
           ])
         )
         || (
+          get(profilePath()).data.access == 'employee'
+          && resource.data.status != 'Completed'
+          && (!resource.data.keys().hasAny(['archived']) || resource.data.archived == false)
+          && isProjectMember(resource.data.projectId)
+          && !isWorkItemAssignee(id)
+          && request.resource.data.assigneeId == resource.data.assigneeId
+          && request.resource.data.assigneeIds.size() == existingAssignees(resource.data).size() + 1
+          && request.resource.data.assigneeIds.hasAll(existingAssignees(resource.data))
+          && request.resource.data.assigneeIds.hasAny([userId()])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assigneeIds', 'updatedAt'])
+        )
+        || (
           isProjectPrincipal(resource.data.projectId)
           && resource.data.status == 'Blocked'
           && request.resource.data.status == 'In Progress'
@@ -193,6 +220,7 @@ service cloud.firestore {
     match /helpRequests/{id} {
       allow read: if activeUser();
       allow create: if activeUser()
+        && get(profilePath()).data.access == 'employee'
         && request.resource.data.raisedBy == userId()
         && isProjectMember(request.resource.data.projectId)
         && request.resource.data.projectId == workItem(request.resource.data.workItemId).projectId
@@ -200,13 +228,13 @@ service cloud.firestore {
         && workItem(request.resource.data.workItemId).status != 'Completed'
         && (!(workItem(request.resource.data.workItemId).keys().hasAny(['archived']))
           || workItem(request.resource.data.workItemId).archived == false)
-        && request.resource.data.kind in ['question', 'blocked']
-        && (request.resource.data.kind != 'blocked'
-          || getAfter(/databases/$(database)/documents/workItems/$(request.resource.data.workItemId)).data.status == 'Blocked')
+        && request.resource.data.kind == 'question'
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
         && request.resource.data.id == id
-        && request.resource.data.level == 'lead'
+        && request.resource.data.level == 'principal'
         && request.resource.data.status == 'Open'
-        && request.resource.data.assignedTo == project(request.resource.data.projectId).leadId
+        && isLinkedAdminUser(request.resource.data.assignedTo)
         && request.resource.data.keys().hasAll([
           'id', 'projectId', 'workItemId', 'raisedBy', 'assignedTo',
           'level', 'subject', 'reason', 'priority', 'status', 'createdAt', 'kind'
@@ -231,19 +259,33 @@ service cloud.firestore {
             ])
           )
           || (
-            (project(resource.data.projectId).leadId == userId() || isWorkItemAssignee(resource.data.workItemId))
+            get(profilePath()).data.access == 'employee'
+            && isWorkItemAssignee(resource.data.workItemId)
             && resource.data.level == 'lead'
             && resource.data.status in ['Open', 'Responded']
             && request.resource.data.level == 'principal'
             && request.resource.data.status == 'Escalated'
-            && request.resource.data.assignedTo == project(resource.data.projectId).principalId
+            && isLinkedAdminUser(request.resource.data.assignedTo)
             && request.resource.data.escalatedBy == userId()
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'level', 'assignedTo', 'escalationNote', 'status', 'escalatedBy', 'escalatedAt'
             ])
           )
           || (
-            isProjectPrincipal(resource.data.projectId)
+            get(profilePath()).data.access == 'employee'
+            && isWorkItemAssignee(resource.data.workItemId)
+            && resource.data.level == 'principal'
+            && resource.data.status in ['Open', 'Responded']
+            && request.resource.data.level == 'principal'
+            && request.resource.data.status == 'Escalated'
+            && request.resource.data.assignedTo == resource.data.assignedTo
+            && request.resource.data.escalatedBy == userId()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'escalationNote', 'status', 'escalatedBy', 'escalatedAt'
+            ])
+          )
+          || (
+            isAdmin()
             && resource.data.level == 'lead'
             && resource.data.status != 'Resolved'
             && request.resource.data.level == 'lead'
@@ -257,7 +299,7 @@ service cloud.firestore {
             ])
           )
           || (
-            isProjectPrincipal(resource.data.projectId)
+            isAdmin()
             && resource.data.level == 'principal'
             && resource.data.status in ['Escalated', 'Seen']
             && request.resource.data.level == 'principal'
@@ -266,7 +308,7 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
           )
           || (
-            isProjectPrincipal(resource.data.projectId)
+            isAdmin()
             && resource.data.level == 'principal'
             && resource.data.status in ['Escalated', 'Seen']
             && request.resource.data.level == 'principal'
@@ -278,9 +320,9 @@ service cloud.firestore {
             ])
           )
           || (
-            isProjectPrincipal(resource.data.projectId)
+            isAdmin()
             && resource.data.level == 'principal'
-            && resource.data.status in ['Escalated', 'Seen', 'Decision Given']
+            && resource.data.status in ['Open', 'Responded', 'Escalated', 'Seen', 'Decision Given']
             && request.resource.data.level == 'principal'
             && request.resource.data.status == 'Resolved'
             && request.resource.data.resolvedBy == userId()

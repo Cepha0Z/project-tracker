@@ -2,6 +2,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebas
 import { doc, getDoc } from 'firebase/firestore';
 import type { User } from '../types';
 import { firebaseAuth, firebaseConfigured, firestoreDb } from './config';
+import { presentUser } from '../domain/people';
 
 type SessionListener = (profile: User | null) => void;
 
@@ -30,7 +31,7 @@ export const authService = {
         const userId = String(mapping.data().userId);
         const profile = await getDoc(doc(firestoreDb!, 'users', userId));
         if (!profile.exists()) throw new Error('The user profile is missing from Firestore.');
-        listener({ ...(profile.data() as User), id: userId, authUid: authUser.uid, email: authUser.email || String(profile.data().email || '') });
+        listener(presentUser({ ...(profile.data() as User), id: userId, access:mapping.data().access, authUid: authUser.uid, email: authUser.email || String(profile.data().email || '') }));
       } catch (error) { onError(friendlyAuthError(error)); listener(null); }
     }, error => onError(friendlyAuthError(error)));
   },

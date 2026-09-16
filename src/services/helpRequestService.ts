@@ -1,16 +1,17 @@
 import type { AppData, DecisionOutcome } from '../types';
 import { makeId, now, withActivity } from './shared';
 import { permissions } from '../permissions/permissions';
-import { workItemService } from './workItemService';
 
 export const helpRequestService = {
-  create(data:AppData,actorId:string,input:{workItemId:string;reason:string;blocked:boolean}):AppData {
+  create(data:AppData,actorId:string,input:{workItemId:string;reason:string}):AppData {
     const item=data.workItems.find(workItem=>workItem.id===input.workItemId);
     if(!item)return data;
     const project=data.projects.find(candidate=>candidate.id===item.projectId);
     const actor=data.users.find(user=>user.id===actorId);
-    if(!project||!actor||item.archived||item.status==='Completed'||!project.teamIds.includes(actorId)||!permissions.canUpdateOwnWork(actor,item))return data;
+    if(!project||!actor||actor.access!=='employee'||item.archived||item.status==='Completed'||!project.teamIds.includes(actorId)||!permissions.canUpdateOwnWork(actor,item))return data;
     if(data.helpRequests.some(request=>request.workItemId===item.id&&request.status!=='Resolved'))return data;
+    const admins=data.users.filter(user=>user.authUid&&user.active!==false&&user.access==='admin');
+    if(!admins.length)return data;
 
     const stamp=now();
     const request={
@@ -18,18 +19,16 @@ export const helpRequestService = {
       projectId:item.projectId,
       workItemId:item.id,
       raisedBy:actorId,
-      assignedTo:project.leadId,
-      level:'lead' as const,
-      subject:`${input.blocked?'Blocker':'Question'} · ${item.name}`,
+      assignedTo:admins.find(user=>user.id===project.principalId)?.id||admins[0].id,
+      level:'principal' as const,
+      subject:`Help request · ${item.name}`,
       reason:input.reason.trim()||'Help requested.',
       priority:'Normal' as const,
       status:'Open' as const,
       createdAt:stamp,
-      kind:input.blocked?'blocked' as const:'question' as const,
+      kind:'question' as const,
     };
-    let next={...data,helpRequests:[request,...data.helpRequests]};
-    if(input.blocked)next=workItemService.setStatus(next,actorId,item.id,'Blocked',item.progress,request.reason);
-    return withActivity(next,item.projectId,actorId,`${input.blocked?'reported a blocker':'asked for help'} on ${item.name}`);
+    return withActivity({...data,helpRequests:[request,...data.helpRequests]},item.projectId,actorId,`asked for help on ${item.name}`);
   },
 
   respond(data:AppData,actorId:string,requestId:string,response:string):AppData {
@@ -55,17 +54,19 @@ export const helpRequestService = {
     const actor=data.users.find(user=>user.id===actorId);
     const item=data.workItems.find(candidate=>candidate.id===request.workItemId);
     if(!project||!actor||!permissions.canEscalateToPrincipal(actor,project,request,item))return data;
+    const admins=data.users.filter(user=>user.authUid&&user.active!==false&&user.access==='admin');
+    if(!admins.length)return data;
     const stamp=now();
     const next={...data,helpRequests:data.helpRequests.map(candidate=>candidate.id===requestId?{
       ...candidate,
       level:'principal' as const,
-      assignedTo:project.principalId,
+      assignedTo:candidate.level==='lead'?(admins.find(user=>user.id===project.principalId)?.id||admins[0].id):candidate.assignedTo,
       ...(input.note?.trim()?{escalationNote:input.note.trim()}:{}),
       status:'Escalated' as const,
       escalatedBy:actorId,
       escalatedAt:stamp,
     }:candidate)};
-    return withActivity(next,request.projectId,actorId,`escalated ${request.subject} to ${data.users.find(user=>user.id===project.principalId)?.name}`);
+    return withActivity(next,request.projectId,actorId,`escalated ${request.subject} to admins`);
   },
 
   markSeen(data:AppData,actorId:string,requestId:string):AppData {
@@ -116,7 +117,7 @@ export const helpRequestService = {
         resolvedBy:actorId,
         resolvedAt:stamp,
       }:candidate),
-      workItems:data.workItems.map(workItem=>workItem.id===request.workItemId&&workItem.status==='Blocked'?{
+      workItems:data.workItems.map(workItem=>request.kind==='blocked'&&workItem.id===request.workItemId&&workItem.status==='Blocked'?{
         ...workItem,
         status:'In Progress' as const,
         blockedReason:undefined,

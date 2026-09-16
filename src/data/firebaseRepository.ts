@@ -11,6 +11,7 @@ import {
 import type { AppData } from '../types';
 import { firestoreDb } from '../firebase/config';
 import { localStore } from './storage';
+import { presentUser } from '../domain/people';
 
 const collections = {
   users: 'users',
@@ -97,7 +98,8 @@ export const firebaseRepository = {
       snapshot => {
         (current[key] as Entity[]) = snapshot.docs.map(snapshotDoc => {
           const value = decode(snapshotDoc.data()) as Record<string,unknown>;
-          return {...value,id:String(value.id || snapshotDoc.id)} as Entity;
+          const entity={...value,id:String(value.id || snapshotDoc.id)} as Entity;
+          return key==='users'?presentUser(entity as AppData['users'][number]) as Entity:entity;
         });
         ready.add(key);
         if (ready.size === Object.keys(collections).length) onData(structuredClone(current));

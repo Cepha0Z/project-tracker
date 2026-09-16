@@ -1,4 +1,24 @@
-import type { AppData } from '../types';
+import type { AppData, User } from '../types';
+
+const originalDisplayNames=new Map<string,string>();
+
+export function displayNameFromEmail(person:Pick<User,'email'|'name'>) {
+  const localPart=person.email?.split('@')[0]?.trim();
+  const first=(localPart||person.name.split(/\s+/)[0]||'User').replace(/[._-]+/g,' ').split(/\s+/)[0];
+  return first.charAt(0).toUpperCase()+first.slice(1).toLowerCase();
+}
+
+export function presentUser(person:User):User {
+  const name=displayNameFromEmail(person);
+  if(person.name!==name)originalDisplayNames.set(person.name,name);
+  return {...person,name,initials:name.slice(0,1).toUpperCase()};
+}
+
+export function displayActivityText(value:string) {
+  let text=value;
+  for(const [original,display] of originalDisplayNames)text=text.replaceAll(original,display);
+  return text;
+}
 
 // Firebase Auth UID is linked to the stable user ID through authProfiles.
 // Unlinked prototype people must never appear as assignable staff.

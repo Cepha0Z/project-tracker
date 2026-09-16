@@ -1,6 +1,6 @@
 import type { AppData, Project, WorkItem } from '../types';
 
-export type ProjectHealth = 'Blocked' | 'Delayed' | 'On Track' | 'Completed';
+export type ProjectHealth = 'Needs Attention' | 'Blocked' | 'Delayed' | 'On Track' | 'Completed';
 
 export function localDateKey(date = new Date()) {
   const year = date.getFullYear();
@@ -31,14 +31,15 @@ export function isWorkItemOverdue(item: WorkItem, date = localDateKey()) {
 
 export function projectHealth(data: AppData, project: Project, date = localDateKey()): ProjectHealth {
   const required = projectWorkItems(data, project.id).filter(item => item.required !== false);
-  if (required.length > 0 && required.every(item => item.status === 'Completed')) return 'Completed';
-  const unresolvedEscalation = data.helpRequests.some(request =>
-    request.projectId === project.id && request.level === 'principal' && request.status !== 'Resolved',
+  const unresolvedHelp = data.helpRequests.some(request =>
+    request.projectId === project.id && request.status !== 'Resolved',
   );
   const unresolvedBlocker = data.helpRequests.some(request =>
     request.projectId === project.id && request.kind === 'blocked' && request.status !== 'Resolved',
   );
-  if (unresolvedEscalation || unresolvedBlocker || required.some(item => item.status === 'Blocked')) return 'Blocked';
+  if (unresolvedBlocker || required.some(item => item.status === 'Blocked')) return 'Blocked';
+  if (unresolvedHelp) return 'Needs Attention';
+  if (required.length > 0 && required.every(item => item.status === 'Completed')) return 'Completed';
   if (required.some(item => isWorkItemOverdue(item, date))) return 'Delayed';
   return 'On Track';
 }
@@ -48,7 +49,7 @@ export function projectAttention(data: AppData, project: Project, date = localDa
   const overdue = required.filter(item => isWorkItemOverdue(item, date));
   const blocked = required.filter(item => item.status === 'Blocked');
   const escalations = data.helpRequests.filter(request =>
-    request.projectId === project.id && request.level === 'principal' && request.status !== 'Resolved',
+    request.projectId === project.id && request.status !== 'Resolved',
   );
   return { overdue, blocked, escalations };
 }

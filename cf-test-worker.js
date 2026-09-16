@@ -266,7 +266,7 @@ const stringField = value => ({ stringValue: String(value) });
 const integerField = value => ({ integerValue: String(value) });
 const timestampField = () => ({ timestampValue: new Date().toISOString() });
 
-async function adminUserIds(env, accessToken) {
+export async function adminUserIds(env, accessToken) {
   const candidates = await queryDocuments(env, accessToken, "authProfiles", "access", "admin");
   const validated = await Promise.all(candidates.map(async profile => {
     if (profile.active !== true || !profile.userId) return null;
@@ -301,9 +301,10 @@ async function disableDevice(env, accessToken, deviceId) {
   });
 }
 
-async function sendToUsers(env, accessToken, userIds, content) {
+export async function sendToUsers(env, accessToken, userIds, content) {
+  const recipients = [...new Set(userIds.filter(Boolean))];
   const snapshots = await Promise.all(
-    [...new Set(userIds.filter(Boolean))].map(userId =>
+    recipients.map(userId =>
       queryDocuments(env, accessToken, "notificationDevices", "userId", userId)
     )
   );
@@ -358,6 +359,8 @@ async function sendToUsers(env, accessToken, userIds, content) {
   }));
 
   return {
+    recipientCount: recipients.length,
+    registeredRecipients: new Set(devices.map(device => device.userId)).size,
     attempted: results.length,
     delivered: results.filter(Boolean).length,
     failed: results.filter(success => !success).length

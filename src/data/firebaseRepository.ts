@@ -109,7 +109,8 @@ export const firebaseRepository = {
     return () => stops.forEach(stop => stop());
   },
   save(data: AppData, previous: AppData) {
-    writeQueue = writeQueue.then(() => persist(data, previous));
+    // One rejected batch must not permanently prevent later independent writes.
+    writeQueue = writeQueue.catch(() => undefined).then(() => persist(data, previous));
     return writeQueue;
   },
   importLocal(currentCloud: AppData) {

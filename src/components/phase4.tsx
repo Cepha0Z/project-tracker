@@ -10,7 +10,7 @@ import { connectedPeople } from '../domain/people';
 import { cycleService } from '../services/cycleService';
 import { projectService } from '../services/projectService';
 import { Avatar, Empty, minutesLabel, Progress, StatusPill } from './ui';
-import { employeeActiveWork, employeeWorkItems, isWorkItemOverdue, localDateKey, projectHealth, workItemAssigneeIds } from '../domain/selectors';
+import { employeeActiveWork, employeeWorkItems, isWorkItemOverdue, localDateKey, projectCardOrder, projectCardState, projectHealth, workItemAssigneeIds } from '../domain/selectors';
 
 type Mutate=(fn:(data:AppData)=>AppData)=>void;
 const today=localDateKey;
@@ -25,7 +25,7 @@ const cycleItems=(data:AppData,p:Project)=>{const c=activeCycle(data,p);return c
 const stageItems=(data:AppData,p:Project,stage:string)=>data.workItems.filter(w=>w.projectId===p.id&&!w.archived&&(w.stageId||w.stage)===stage);
 const elapsed=(item:WorkItem)=>{let value=item.activeElapsedMinutes||0;if(item.status==='In Progress'&&item.startedAt)value+=Math.max(0,Math.round((Date.now()-Date.parse(item.startedAt))/60000));return value};
 const statusFor=projectHealth;
-const projectPriority=(data:AppData,project:Project)=>['Blocked','Needs Attention'].includes(projectHealth(data,project))?0:data.workItems.some(item=>item.projectId===project.id&&item.archived)&&!data.workItems.some(item=>item.projectId===project.id&&!item.archived)?1:2;
+const projectPriority=(data:AppData,project:Project)=>projectCardOrder[projectCardState(data,project)];
 
 export function CompactProjects({data,user,openProject,mutate}:{data:AppData;user:User;openProject:(id:string)=>void;mutate:Mutate}){
   const projects=data.projects.filter(p=>permissions.canViewProject(user,p)).sort((a,b)=>projectPriority(data,a)-projectPriority(data,b));const [creating,setCreating]=useState(false);

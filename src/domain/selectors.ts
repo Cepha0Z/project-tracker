@@ -1,6 +1,7 @@
 import type { AppData, Project, WorkItem } from '../types';
 
 export type ProjectHealth = 'Needs Attention' | 'Blocked' | 'Delayed' | 'On Track' | 'Completed';
+export type ProjectCardState = 'red' | 'yellow' | 'normal';
 
 export function localDateKey(date = new Date()) {
   const year = date.getFullYear();
@@ -53,3 +54,13 @@ export function projectAttention(data: AppData, project: Project, date = localDa
   );
   return { overdue, blocked, escalations };
 }
+
+export function projectCardState(data: AppData, project: Project): ProjectCardState {
+  if (data.helpRequests.some(request => request.projectId === project.id && request.status !== 'Resolved')
+    || projectHealth(data, project) === 'Blocked') return 'red';
+  const all = data.workItems.filter(item => item.projectId === project.id);
+  if (all.length > 0 && all.every(item => item.archived)) return 'yellow';
+  return 'normal';
+}
+
+export const projectCardOrder: Record<ProjectCardState, number> = { red: 0, yellow: 1, normal: 2 };

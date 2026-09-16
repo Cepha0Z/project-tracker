@@ -32,6 +32,7 @@ export interface WorkItem {
   progress: number;
   notes?: string;
   blockedReason?: string;
+  unblockedByHelpId?: string;
   hours: number;
   cycleId?: string;
   archived?: boolean;

@@ -17,5 +17,9 @@ export const permissions = {
   canEscalateToPrincipal: (user:User, _project:Project, request:HelpRequest, item?:WorkItem) => user.access==='employee'&&Boolean(item&&(item.assigneeIds?.length?item.assigneeIds:[item.assigneeId]).includes(user.id))&&['Open','Responded'].includes(request.status),
   canRespondAsLead: (user:User, project:Project, request:HelpRequest) => project.leadId===user.id&&request.level==='lead'&&['Open','Responded'].includes(request.status),
   canDecidePrincipalRequest: (user:User, _project:Project, request:HelpRequest) => user.access==='admin'&&request.level==='principal'&&['Escalated','Seen'].includes(request.status),
-  canResolveRequest: (user:User, _project:Project, request:HelpRequest) => request.status!=='Resolved'&&user.access==='admin',
+  canResolveRequest: (user:User, project:Project, request:HelpRequest) => request.status!=='Resolved'&&request.projectId===project.id&&(
+    user.access==='admin'||request.raisedBy===user.id||project.leadId===user.id
+    ||project.principalId===user.id||project.principalIds?.includes(user.id)===true
+    ||project.teamIds.includes(user.id)
+  ),
 };

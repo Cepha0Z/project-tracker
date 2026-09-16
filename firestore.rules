@@ -87,6 +87,21 @@ service cloud.firestore {
         && request.resource.data.kind == resource.data.kind;
     }
 
+    function canCloseHelpRequest(help) {
+      return isProjectMember(help.projectId) || help.raisedBy == userId();
+    }
+
+    function closesBlockedHelpFor(workItemId, projectId, helpId) {
+      let before = get(/databases/$(database)/documents/helpRequests/$(helpId)).data;
+      let after = getAfter(/databases/$(database)/documents/helpRequests/$(helpId)).data;
+      return before.workItemId == workItemId
+        && before.projectId == projectId
+        && before.kind == 'blocked'
+        && before.status != 'Resolved'
+        && after.status == 'Resolved'
+        && after.resolvedBy == userId();
+    }
+
     function ownsNotificationDevice(device) {
       return activeUser()
         && device.userId == userId()
@@ -198,6 +213,16 @@ service cloud.firestore {
             'status', 'blockedReason', 'startedAt', 'updatedAt'
           ])
         )
+        || (
+          resource.data.status == 'Blocked'
+          && request.resource.data.status == 'In Progress'
+          && request.resource.data.progress == resource.data.progress
+          && request.resource.data.keys().hasAny(['unblockedByHelpId'])
+          && closesBlockedHelpFor(id, resource.data.projectId, request.resource.data.unblockedByHelpId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'blockedReason', 'startedAt', 'updatedAt', 'unblockedByHelpId'
+          ])
+        )
       );
       allow delete: if activeUser() && canManageProject(resource.data.projectId);
     }
@@ -299,20 +324,6 @@ service cloud.firestore {
           )
           || (
             isAdmin()
-            && resource.data.level == 'lead'
-            && resource.data.status != 'Resolved'
-            && request.resource.data.level == 'lead'
-            && request.resource.data.status == 'Resolved'
-            && request.resource.data.resolvedBy == userId()
-            && request.resource.data.resolutionNote is string
-            && request.resource.data.resolutionNote.size() > 0
-            && request.resource.data.response == request.resource.data.resolutionNote
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'status', 'response', 'resolutionNote', 'resolvedBy', 'resolvedAt'
-            ])
-          )
-          || (
-            isAdmin()
             && resource.data.level == 'principal'
             && resource.data.status in ['Escalated', 'Seen']
             && request.resource.data.level == 'principal'
@@ -333,15 +344,19 @@ service cloud.firestore {
             ])
           )
           || (
-            isAdmin()
-            && resource.data.level == 'principal'
+            canCloseHelpRequest(resource.data)
             && resource.data.status in ['Open', 'Responded', 'Escalated', 'Seen', 'Decision Given']
-            && request.resource.data.level == 'principal'
+            && request.resource.data.level == resource.data.level
+            && request.resource.data.assignedTo == resource.data.assignedTo
             && request.resource.data.status == 'Resolved'
             && request.resource.data.resolvedBy == userId()
+            && request.resource.data.resolvedAt is timestamp
             && request.resource.data.resolutionNote is string
             && request.resource.data.resolutionNote.size() > 0
-            && request.resource.data.response == request.resource.data.resolutionNote
+            && request.resource.data.response == (
+              resource.data.keys().hasAny(['response'])
+                ? resource.data.response : request.resource.data.resolutionNote
+            )
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'status', 'response', 'resolutionNote', 'resolvedBy', 'resolvedAt'
             ])

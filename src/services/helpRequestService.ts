@@ -105,15 +105,16 @@ export const helpRequestService = {
     if(!request)return data;
     const project=data.projects.find(candidate=>candidate.id===request.projectId);
     const actor=data.users.find(user=>user.id===actorId);
-    if(!project||!actor||!note.trim()||!permissions.canResolveRequest(actor,project,request))return data;
+    if(!project||!actor||!permissions.canResolveRequest(actor,project,request))return data;
     const stamp=now();
+    const resolutionNote=note.trim()||'Closed without a written note.';
     const next={
       ...data,
       helpRequests:data.helpRequests.map(candidate=>candidate.id===requestId?{
         ...candidate,
         status:'Resolved' as const,
-        response:note.trim(),
-        resolutionNote:note.trim(),
+        response:candidate.response??resolutionNote,
+        resolutionNote,
         resolvedBy:actorId,
         resolvedAt:stamp,
       }:candidate),
@@ -123,6 +124,7 @@ export const helpRequestService = {
         blockedReason:undefined,
         startedAt:stamp,
         updatedAt:stamp,
+        unblockedByHelpId:request.id,
       }:workItem),
     };
     return withActivity(next,request.projectId,actorId,`resolved ${request.subject}`);

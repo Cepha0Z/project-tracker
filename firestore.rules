@@ -29,6 +29,10 @@ service cloud.firestore {
       return getAfter(/databases/$(database)/documents/projects/$(projectId)).data;
     }
 
+    function workItem(workItemId) {
+      return get(/databases/$(database)/documents/workItems/$(workItemId)).data;
+    }
+
     function isProjectMember(projectId) {
       return isAdmin() || project(projectId).principalId == userId()
         || project(projectId).leadId == userId()
@@ -41,6 +45,31 @@ service cloud.firestore {
 
     function canManageFutureProject(projectId) {
       return isAdmin() || futureProject(projectId).leadId == userId();
+    }
+
+    function isProjectPrincipal(projectId) {
+      return isAdmin() || project(projectId).principalId == userId()
+        || (
+          project(projectId).keys().hasAny(['principalIds'])
+          && project(projectId).principalIds.hasAny([userId()])
+        );
+    }
+
+    function isWorkItemAssignee(workItemId) {
+      return workItem(workItemId).assigneeId == userId()
+        || (
+          workItem(workItemId).keys().hasAny(['assigneeIds'])
+          && workItem(workItemId).assigneeIds.hasAny([userId()])
+        );
+    }
+
+    function unchangedHelpIdentity() {
+      return request.resource.data.projectId == resource.data.projectId
+        && request.resource.data.workItemId == resource.data.workItemId
+        && request.resource.data.raisedBy == resource.data.raisedBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.subject == resource.data.subject
+        && request.resource.data.kind == resource.data.kind;
     }
 
     function ownsNotificationDevice(device) {
@@ -60,7 +89,7 @@ service cloud.firestore {
 
     match /notificationDevices/{deviceId} {
       // registerDevice() checks this exact UID-prefixed document before creating it.
-      // Collection listing is unnecessary for clients; Cloud Functions use Admin SDK.
+      // Collection listing is unnecessary for clients; the authenticated Worker uses server credentials.
       allow get: if activeUser()
         && deviceId.matches(request.auth.uid + '_.*');
       allow list: if false;
@@ -153,36 +182,90 @@ service cloud.firestore {
       allow create: if activeUser()
         && request.resource.data.raisedBy == userId()
         && isProjectMember(request.resource.data.projectId)
+        && request.resource.data.projectId == workItem(request.resource.data.workItemId).projectId
+        && isWorkItemAssignee(request.resource.data.workItemId)
+        && request.resource.data.id == id
+        && request.resource.data.level == 'lead'
+        && request.resource.data.status == 'Open'
+        && request.resource.data.assignedTo == project(request.resource.data.projectId).leadId
+        && request.resource.data.keys().hasAll([
+          'id', 'projectId', 'workItemId', 'raisedBy', 'assignedTo',
+          'level', 'subject', 'reason', 'priority', 'status', 'createdAt', 'kind'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'id', 'projectId', 'workItemId', 'raisedBy', 'assignedTo',
+          'level', 'subject', 'reason', 'priority', 'status', 'createdAt', 'kind'
+        ]);
+      allow update: if activeUser()
+        && unchangedHelpIdentity()
         && (
           (
-            project(request.resource.data.projectId).leadId != userId()
+            project(resource.data.projectId).leadId == userId()
+            && resource.data.level == 'lead'
+            && resource.data.status in ['Open', 'Responded']
             && request.resource.data.level == 'lead'
-            && request.resource.data.status == 'Open'
-            && request.resource.data.assignedTo == project(request.resource.data.projectId).leadId
+            && request.resource.data.assignedTo == resource.data.assignedTo
+            && request.resource.data.status == 'Responded'
+            && request.resource.data.respondedBy == userId()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'response', 'respondedBy', 'respondedAt'
+            ])
           )
-          || (
-            project(request.resource.data.projectId).leadId == userId()
-            && request.resource.data.level == 'principal'
-            && request.resource.data.status == 'Escalated'
-            && request.resource.data.assignedTo == project(request.resource.data.projectId).principalId
-            && request.resource.data.escalatedBy == userId()
-          )
-        );
-      allow update: if activeUser()
-        && (isAdmin() || project(resource.data.projectId).leadId == userId())
-        && request.resource.data.projectId == resource.data.projectId
-        && request.resource.data.workItemId == resource.data.workItemId
-        && request.resource.data.raisedBy == resource.data.raisedBy
-        && request.resource.data.createdAt == resource.data.createdAt
-        && (
-          request.resource.data.level == resource.data.level
           || (
             project(resource.data.projectId).leadId == userId()
             && resource.data.level == 'lead'
+            && resource.data.status in ['Open', 'Responded']
             && request.resource.data.level == 'principal'
             && request.resource.data.status == 'Escalated'
             && request.resource.data.assignedTo == project(resource.data.projectId).principalId
             && request.resource.data.escalatedBy == userId()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'level', 'assignedTo', 'reason', 'tried', 'decisionNeeded',
+              'priority', 'status', 'escalatedBy', 'escalatedAt'
+            ])
+          )
+          || (
+            project(resource.data.projectId).leadId == userId()
+            && resource.data.level == 'lead'
+            && resource.data.status != 'Resolved'
+            && request.resource.data.level == 'lead'
+            && request.resource.data.status == 'Resolved'
+            && request.resource.data.resolvedBy == userId()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'resolutionNote', 'resolvedBy', 'resolvedAt'
+            ])
+          )
+          || (
+            isProjectPrincipal(resource.data.projectId)
+            && resource.data.level == 'principal'
+            && resource.data.status in ['Escalated', 'Seen']
+            && request.resource.data.level == 'principal'
+            && request.resource.data.status == 'Seen'
+            && resource.data.status == 'Escalated'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          )
+          || (
+            isProjectPrincipal(resource.data.projectId)
+            && resource.data.level == 'principal'
+            && resource.data.status in ['Escalated', 'Seen']
+            && request.resource.data.level == 'principal'
+            && request.resource.data.status == 'Decision Given'
+            && request.resource.data.decidedBy == userId()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'assignedTo', 'principalDecision', 'decisionOutcome',
+              'decidedBy', 'decidedAt'
+            ])
+          )
+          || (
+            isProjectPrincipal(resource.data.projectId)
+            && resource.data.level == 'principal'
+            && resource.data.status in ['Escalated', 'Seen', 'Decision Given']
+            && request.resource.data.level == 'principal'
+            && request.resource.data.status == 'Resolved'
+            && request.resource.data.resolvedBy == userId()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'resolutionNote', 'resolvedBy', 'resolvedAt'
+            ])
           )
         );
       allow delete: if isAdmin();

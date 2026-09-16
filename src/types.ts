@@ -120,6 +120,7 @@ export interface Project {
   description: string;
   focus: string;
   principalId: string;
+  principalIds?: string[];
   leadId: string;
   teamIds: string[];
   currentStage: string;

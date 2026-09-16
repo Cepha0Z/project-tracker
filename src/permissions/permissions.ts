@@ -13,8 +13,8 @@ export const permissions = {
   canAssignWork: (user:User, project:Project) => project.leadId===user.id||user.access==='admin',
   canManageWorkItem: (user:User, project:Project) => project.leadId===user.id||user.access==='admin',
   canUpdateOwnWork: (user:User, item:WorkItem) => (item.assigneeIds||[item.assigneeId]).includes(user.id),
-  canEscalateToPrincipal: (user:User, project:Project, request:HelpRequest) => project.leadId===user.id&&request.level==='lead',
-  canRespondAsLead: (user:User, project:Project, request:HelpRequest) => project.leadId===user.id&&request.level==='lead',
-  canDecidePrincipalRequest: (user:User, project:Project, request:HelpRequest) => user.id===project.principalId&&request.level==='principal'&&['Escalated','Seen'].includes(request.status),
-  canResolveRequest: (user:User, project:Project, _request:HelpRequest) => user.access==='admin'||project.leadId===user.id,
+  canEscalateToPrincipal: (user:User, project:Project, request:HelpRequest) => project.leadId===user.id&&request.level==='lead'&&['Open','Responded'].includes(request.status),
+  canRespondAsLead: (user:User, project:Project, request:HelpRequest) => project.leadId===user.id&&request.level==='lead'&&['Open','Responded'].includes(request.status),
+  canDecidePrincipalRequest: (user:User, project:Project, request:HelpRequest) => (user.access==='admin'||user.id===project.principalId||project.principalIds?.includes(user.id)===true)&&request.level==='principal'&&['Escalated','Seen'].includes(request.status),
+  canResolveRequest: (user:User, project:Project, request:HelpRequest) => request.level==='lead'?project.leadId===user.id:(user.access==='admin'||user.id===project.principalId||project.principalIds?.includes(user.id)===true),
 };

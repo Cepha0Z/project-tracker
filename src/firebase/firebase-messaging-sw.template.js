@@ -17,6 +17,9 @@ importScripts('https://www.gstatic.com/firebasejs/12.19.0/firebase-messaging-com
 firebase.initializeApp(__FIREBASE_CONFIG__);
 const messaging=firebase.messaging();
 messaging.onBackgroundMessage(payload=>{
+  // Notification payloads are displayed by the browser/FCM. Only data-only
+  // messages need the service worker to create a notification explicitly.
+  if(payload.notification)return;
   const data=payload.data||{};
   self.registration.showNotification(data.title||'Studio Projects',{
     body:data.body||'A project needs your attention.',

@@ -1,4 +1,5 @@
 const APP_URL = "https://nebulous-project--tracker.web.app";
+export const dailyReportUrl = (reportId, updateId) => `${APP_URL}/?report=${encodeURIComponent(reportId)}&update=${encodeURIComponent(updateId)}`;
 const ALLOWED_ORIGINS = new Set([
   APP_URL,
   "https://nebulous-project--tracker.firebaseapp.com",
@@ -414,7 +415,7 @@ async function sendDailyReportNotification(request, env, accessToken, profile, r
       `${project.name} — ${item.name}${itemCount > 1 ? ` +${itemCount - 1} more` : ""}`,
       shortMessage(update.text || report.summary)
     ].filter(Boolean).join("\n"),
-    url: `${APP_URL}/?project=${encodeURIComponent(project.id)}&workItem=${encodeURIComponent(item.id)}`,
+    url: dailyReportUrl(reportId, update.id),
     tag: `daily-report-${reportId}`
   };
   const markerId = `${reportId}_daily_report_submitted`;

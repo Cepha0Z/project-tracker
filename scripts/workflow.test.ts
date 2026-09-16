@@ -83,6 +83,7 @@ assert.notEqual(workItemService.setProgress(resolved,'rahul','assigned-work',80)
 const requesterClosed=helpRequestService.resolve(normal,'rahul',normal.helpRequests[0].id,'');
 assert.equal(requesterClosed.helpRequests[0].status,'Resolved','requester can close without a written note');
 assert.equal(requesterClosed.helpRequests[0].resolvedBy,'rahul');
+assert.deepEqual(notificationChanges(normal,requesterClosed),[],'self-closing a request must not invoke the admin-only resolution push endpoint');
 assert.equal(projectCardState(requesterClosed,requesterClosed.projects[0]),'normal','requester closure clears red attention');
 assert.equal(requesterClosed.workItems[0].progress,40,'closing help does not change work progress');
 assert.notEqual(workItemService.setProgress(requesterClosed,'rahul','assigned-work',60),requesterClosed,'work remains usable');
@@ -96,6 +97,10 @@ const previouslyAnswered={...normal,helpRequests:[{...normal.helpRequests[0],sta
 const answeredClosed=helpRequestService.resolve(previouslyAnswered,'rahul',normal.helpRequests[0].id,'Resolved verbally');
 assert.equal(answeredClosed.helpRequests[0].response,'Earlier direction','earlier response stays in history');
 assert.equal(answeredClosed.helpRequests[0].resolutionNote,'Resolved verbally');
+const noteFreeReport=updateService.createReport(normal,'rahul',{summary:'',entries:[{workItemId:'assigned-work',progress:80,status:'In Progress',note:''}]});
+assert.equal(noteFreeReport.updates[0].text,'','daily report note may remain blank');
+assert.equal(noteFreeReport.updates[0].previousProgress,normal.workItems[0].progress,'note-free report preserves the progress history');
+assert.deepEqual(notificationChanges(normal,noteFreeReport),[{id:noteFreeReport.dailyReports[0].id,event:'daily_report_submitted'}],'note-free submission still notifies admins');
 const blockedHelp={...normal,workItems:[{...normal.workItems[0],status:'Blocked' as const,blockedReason:'Waiting for input'}],helpRequests:[{...normal.helpRequests[0],kind:'blocked' as const}]};
 const blockedClosed=helpRequestService.resolve(blockedHelp,'rahul',normal.helpRequests[0].id,'Clarified');
 assert.equal(blockedClosed.workItems[0].status,'In Progress','closing a blocked request reopens work');

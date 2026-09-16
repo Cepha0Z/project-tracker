@@ -14,7 +14,7 @@ import { helpRequestService } from './services/helpRequestService';
 import { cycleService } from './services/cycleService';
 import type { AppData, Cycle, DecisionOutcome, HelpRequest, Priority, Project, User, WorkItem, WorkStatus } from './types';
 import { Avatar, Empty, formatTime, minutesLabel, Modal, Progress, SectionTitle, StatusPill } from './components/ui';
-import { CompactProjects, EmployeeWorkspace, IssueModal, ProjectWorkspace, SimplePeople, SimpleReports } from './components/phase4';
+import { CompactProjects, EmployeeWorkspace, IssueModal, NotificationCenter, OverviewProjectGroups, ProjectWorkspace, SimplePeople, SimpleReports } from './components/phase4';
 import { authService } from './firebase/authService';
 import { localDateKey, projectAttention, projectCardOrder, projectCardState, projectHealth, projectWorkItems, workItemAssigneeIds } from './domain/selectors';
 import { NotificationControl } from './components/NotificationControl';
@@ -22,7 +22,7 @@ import { notificationService, type ForegroundNotification } from './services/not
 import { helpNotificationService } from './services/helpNotificationService';
 import { displayActivityText } from './domain/people';
 
-type Page='home'|'projects'|'project'|'work'|'people'|'reports';
+type Page='home'|'projects'|'project'|'work'|'people'|'reports'|'notifications';
 type Mutate=(fn:(data:AppData)=>AppData)=>void;
 const today=localDateKey;
 const assigneeIds=workItemAssigneeIds;
@@ -38,10 +38,12 @@ export default function App(){
   const [data,setData]=useState<AppData>(()=>repository.load());
   const [sessionUser,setSessionUser]=useState<User|null>(null);
   const [authReady,setAuthReady]=useState(false),[dataReady,setDataReady]=useState(false),[syncError,setSyncError]=useState('');
-  const [page,setPage]=useState<Page>(()=>initialTarget.has('project')?'project':'home');
+  const [page,setPage]=useState<Page>(()=>initialTarget.has('report')?'reports':initialTarget.has('project')?'project':'home');
   const [projectId,setProjectId]=useState(()=>initialTarget.get('project')||'villa-60');
   const [targetWorkItemId,setTargetWorkItemId]=useState<string|undefined>(()=>initialTarget.get('workItem')||undefined);
   const [targetHelpId,setTargetHelpId]=useState<string|undefined>(()=>initialTarget.get('help')||undefined);
+  const [targetReportId,setTargetReportId]=useState<string|undefined>(()=>initialTarget.get('report')||undefined);
+  const [targetUpdateId,setTargetUpdateId]=useState<string|undefined>(()=>initialTarget.get('update')||undefined);
   const [foregroundNotification,setForegroundNotification]=useState<ForegroundNotification|null>(null);
   const [menuOpen,setMenuOpen]=useState(false);
   useEffect(()=>{let stopData:()=>void=()=>undefined;const stopAuth=authService.subscribe(profile=>{stopData();setSessionUser(profile);setAuthReady(true);setSyncError('');if(profile){setDataReady(false);stopData=repository.subscribe(next=>{setData(next);setDataReady(true)},error=>{setSyncError(error.message);setDataReady(true)})}else setDataReady(false)},message=>{setSyncError(message);setAuthReady(true)});return()=>{stopData();stopAuth()}},[]);
@@ -49,9 +51,11 @@ export default function App(){
   const storedUser=data.users.find(u=>u.id===sessionUser?.id);
   const user=sessionUser?{...(storedUser||sessionUser),access:sessionUser.access}:null;
   const mutate:Mutate=fn=>{const before=data,next=fn(before);if(next===before)return;setData(next);repository.save(next,before).then(()=>{void helpNotificationService.dispatchChanges(before,next).then(()=>setSyncError('')).catch(error=>setSyncError(error instanceof Error?error.message:'Saved, but notification delivery failed.'))}).catch(error=>{setSyncError(error instanceof Error?error.message:'Unable to save changes.');setData(before)})};
-  const navigate=(next:Page)=>{setPage(next);setMenuOpen(false)};
+  const navigate=(next:Page)=>{if(next==='reports'){setTargetReportId(undefined);setTargetUpdateId(undefined)}setPage(next);setMenuOpen(false)};
   const openProject=(id:string)=>{setProjectId(id);setTargetWorkItemId(undefined);setTargetHelpId(undefined);navigate('project')};
-  const openNotification=()=>{if(!foregroundNotification)return;const target=new URL(foregroundNotification.url,window.location.origin),linkedProject=target.searchParams.get('project');if(linkedProject){setProjectId(linkedProject);setTargetWorkItemId(target.searchParams.get('workItem')||undefined);setTargetHelpId(target.searchParams.get('help')||undefined);navigate('project')}setForegroundNotification(null)};
+  const openWorkItem=(linkedProject:string,itemId:string,helpId?:string)=>{setProjectId(linkedProject);setTargetWorkItemId(itemId||undefined);setTargetHelpId(helpId);navigate('project')};
+  const openReport=(reportId:string,updateId:string)=>{navigate('reports');setTargetReportId(reportId);setTargetUpdateId(updateId||undefined)};
+  const openNotification=()=>{if(!foregroundNotification)return;const target=new URL(foregroundNotification.url,window.location.origin),reportId=target.searchParams.get('report'),linkedProject=target.searchParams.get('project');if(reportId){openReport(reportId,target.searchParams.get('update')||'')}else if(linkedProject){openWorkItem(linkedProject,target.searchParams.get('workItem')||'',target.searchParams.get('help')||undefined)}setForegroundNotification(null)};
   if(!authReady)return <div className="firebase-loading"><span/><strong>Connecting to Studio Projects…</strong></div>;
   if(!user)return <Login externalError={syncError}/>;
   if(!dataReady)return <div className="firebase-loading"><span/><strong>Loading your workspace…</strong></div>;
@@ -66,17 +70,18 @@ export default function App(){
       <div className="sidebar-foot"><NotificationControl user={user}/><div className="profile-switch"><Avatar user={user} size="sm"/><span><strong>{user.name.split(' ')[0]}</strong><small>{isPrincipal?'Principal':data.projects.some(p=>p.leadId===user.id)?'Project Lead':user.title}</small></span></div><button className="logout" onClick={async()=>{await notificationService.disable();await authService.signOut()}}><LogOut size={17}/> Sign out</button></div>
     </aside>
     <div className="main-shell">
-      <header className={`topbar ${isPrincipal&&page==='home'?'boss-topbar':''}`}><button className="menu-button" onClick={()=>setMenuOpen(true)} aria-label="Open menu"><Menu/></button>{isPrincipal&&page==='home'?<div className="boss-date">{new Date().toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div>:<div className="crumb"><span>Studio Projects</span><b>/</b><strong>{page==='project'?data.projects.find(p=>p.id===projectId)?.name:String(nav.find(n=>n[0]===page)?.[1]??'')}</strong></div>}<div className="top-actions">{!(isPrincipal&&page==='home')&&<button className="icon-button" onClick={()=>navigate('projects')} aria-label="Search projects"><Search size={18}/></button>}<button className="icon-button notification" onClick={()=>navigate('home')} aria-label="Open attention queue"><Bell size={20}/>{data.helpRequests.some(h=>h.assignedTo===user.id&&h.status!=='Resolved')&&<span/>}</button><Avatar user={user}/>{isPrincipal&&page==='home'&&<span className="boss-user"><strong>{user.name.split(' ')[0]}</strong><small>Principal</small></span>}</div></header>
+      <header className={`topbar ${isPrincipal&&page==='home'?'boss-topbar':''}`}><button className="menu-button" onClick={()=>setMenuOpen(true)} aria-label="Open menu"><Menu/></button>{isPrincipal&&page==='home'?<div className="boss-date">{new Date().toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div>:<div className="crumb"><span>Studio Projects</span><b>/</b><strong>{page==='project'?data.projects.find(p=>p.id===projectId)?.name:page==='notifications'?'Notifications':String(nav.find(n=>n[0]===page)?.[1]??'')}</strong></div>}<div className="top-actions">{!(isPrincipal&&page==='home')&&<button className="icon-button" onClick={()=>navigate('projects')} aria-label="Search projects"><Search size={18}/></button>}<button className="icon-button notification" onClick={()=>navigate('notifications')} aria-label="Open notifications"><Bell size={20}/>{data.helpRequests.some(h=>(isPrincipal||h.raisedBy===user.id)&&h.status!=='Resolved')&&<span/>}</button><Avatar user={user}/>{isPrincipal&&page==='home'&&<span className="boss-user"><strong>{user.name.split(' ')[0]}</strong><small>Principal</small></span>}</div></header>
       <main>
         {syncError&&<div className="sync-error"><AlertCircle size={16}/>{syncError}</div>}
         {foregroundNotification&&<button className="foreground-notification" onClick={openNotification}><Bell size={17}/><span><strong>{foregroundNotification.title}</strong><small>{foregroundNotification.body}</small></span><ArrowRight size={15}/></button>}
         <>
-        {page==='home'&&(isPrincipal?<PrincipalHome data={data} user={user} openProject={openProject} mutate={mutate}/>:<EmployeeWorkspace data={data} user={user} openProject={openProject} mutate={mutate}/>)}
+        {page==='home'&&(isPrincipal?<PrincipalOverview data={data} openWorkItem={openWorkItem}/>:<EmployeeWorkspace data={data} user={user} openWorkItem={openWorkItem} mutate={mutate}/>)}
         {page==='projects'&&<CompactProjects data={data} user={user} openProject={openProject} mutate={mutate}/>} 
         {page==='project'&&(data.projects.some(project=>project.id===projectId)?<ProjectWorkspace data={data} user={user} projectId={projectId} initialWorkItemId={targetWorkItemId} initialHelpId={targetHelpId} back={()=>navigate('projects')} mutate={mutate}/>:<div className="page simple-page"><button className="secondary" onClick={()=>navigate('projects')}>Back to Projects</button><Empty>Project no longer exists.</Empty></div>)}
-        {page==='work'&&<EmployeeWorkspace data={data} user={user} openProject={openProject} mutate={mutate} showAll/>} 
+        {page==='work'&&<EmployeeWorkspace data={data} user={user} openWorkItem={openWorkItem} mutate={mutate} showAll/>}
         {page==='people'&&<SimplePeople data={data} user={user} mutate={mutate}/>} 
-        {page==='reports'&&<SimpleReports data={data} user={user}/>}</>
+        {page==='reports'&&<SimpleReports data={data} user={user} focusReportId={targetReportId} focusUpdateId={targetUpdateId}/>}
+        {page==='notifications'&&<NotificationCenter data={data} user={user} openHelp={openWorkItem} openReport={openReport}/>}</>
       </main>
     </div>
   </div>;
@@ -89,6 +94,12 @@ function Login({externalError}:{externalError:string}){
 }
 
 const projectLocations:Record<string,string>={'villa-60':'Bangalore',kgf:'Kolar',casa:'Bangalore'};
+function PrincipalOverview({data,openWorkItem}:{data:AppData;openWorkItem:(projectId:string,itemId:string)=>void}){
+  const projects=[...data.projects].sort((a,b)=>projectCardOrder[projectCardState(data,a)]-projectCardOrder[projectCardState(data,b)]);
+  const work=data.workItems.filter(item=>!item.archived),attention=projects.filter(project=>['Blocked','Needs Attention','Delayed'].includes(projectHealth(data,project))).length;
+  const onTrack=projects.filter(project=>projectHealth(data,project)==='On Track').length,completed=projects.filter(project=>projectHealth(data,project)==='Completed').length;
+  return <div className="page simple-page principal-overview"><div className="boss-overview-head"><div><h1>Studio Overview</h1><p>Projects at a glance.</p></div><div className="boss-metrics"><span className="needs"><b>{attention}</b><small>Need Attention</small></span><span className="track"><b>{onTrack}</b><small>On Track</small></span><span><b>{completed}</b><small>Completed</small></span></div></div><OverviewProjectGroups data={data} projects={projects} work={work} openWorkItem={openWorkItem}/></div>;
+}
 function PrincipalHome({data,user,openProject,mutate}:{data:AppData;user:User;openProject:(id:string)=>void;mutate:Mutate}){
   const projects=data.projects,[expanded,setExpanded]=useState<string|null>(null),[selectedHelp,setSelectedHelp]=useState<HelpRequest|null>(null);
   const unresolved=data.helpRequests.filter(request=>request.status!=='Resolved'&&projects.some(project=>project.id===request.projectId&&(user.access==='admin'||project.principalId===user.id||project.principalIds?.includes(user.id)))).sort((left,right)=>(Number(right.status==='Escalated')-Number(left.status==='Escalated'))||right.createdAt.localeCompare(left.createdAt));

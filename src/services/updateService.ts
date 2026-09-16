@@ -12,7 +12,7 @@ export const updateService = {
       const item=next.workItems.find(w=>w.id===entry.workItemId); if(!item||item.status==='Blocked'||!permissions.canUpdateOwnWork(actor,item))continue;
       const project=next.projects.find(p=>p.id===item.projectId),cycle=next.cycles.find(c=>c.id===project?.activeCycleId&&c.deliverableIds?.includes(item.id)); const updateId=makeId('update'); updateIds.push(updateId);projectIds.add(item.projectId);
       const previousProgress=item.progress,progress=entry.status==='Completed'?100:entry.progress,progressDelta=progress-previousProgress;
-      const update:DailyUpdate={id:updateId,reportId,projectId:item.projectId,workItemId:item.id,userId:actorId,text:entry.note||input.summary,progress,previousProgress,progressDelta,minutes:0,status:entry.status,blocker:entry.blocker,createdAt,cycleId:item.cycleId||cycle?.id};
+      const update:DailyUpdate={id:updateId,reportId,projectId:item.projectId,workItemId:item.id,userId:actorId,text:entry.note?.trim()||'',progress,previousProgress,progressDelta,minutes:0,status:entry.status,blocker:entry.blocker,createdAt,cycleId:item.cycleId||cycle?.id};
       next=workItemService.update(next,actorId,item.id,{progress,status:entry.status,blockedReason:entry.blocker});
       next={...next,updates:[update,...next.updates]};
     }

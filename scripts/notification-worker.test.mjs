@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { adminUserIds, sendToUsers } from '../cf-test-worker.js';
+import { adminUserIds, dailyReportUrl, sendToUsers } from '../cf-test-worker.js';
 
 const originalFetch=globalThis.fetch;
 const doc=(collection,id,fields)=>({name:`projects/test/databases/(default)/documents/${collection}/${id}`,fields:Object.fromEntries(Object.entries(fields).map(([key,value])=>[key,typeof value==='boolean'?{booleanValue:value}:{stringValue:String(value)}]))});
@@ -31,6 +31,7 @@ globalThis.fetch=async(input,options={})=>{
   throw new Error(`Unexpected test request: ${url}`);
 };
 try{
+  assert.equal(dailyReportUrl('report 1','update/1'),'https://nebulous-project--tracker.web.app/?report=report%201&update=update%2F1','daily push opens its exact Reports entry');
   const recipients=await adminUserIds({FIREBASE_PROJECT_ID:'test'},'fake-access-token');
   assert.deepEqual(recipients,['manoj','kiran'],'admin lookup excludes project leads');
   const delivered=await sendToUsers({FIREBASE_PROJECT_ID:'test'},'fake-access-token',recipients,{title:'Test',body:'Test',url:'https://example.com',tag:'test'});

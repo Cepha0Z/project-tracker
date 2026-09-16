@@ -73,7 +73,7 @@ export default function App(){
         <>
         {page==='home'&&(isPrincipal?<PrincipalHome data={data} user={user} openProject={openProject} mutate={mutate}/>:<EmployeeWorkspace data={data} user={user} openProject={openProject} mutate={mutate}/>)}
         {page==='projects'&&<CompactProjects data={data} user={user} openProject={openProject} mutate={mutate}/>} 
-        {page==='project'&&<ProjectWorkspace data={data} user={user} projectId={projectId} initialWorkItemId={targetWorkItemId} initialHelpId={targetHelpId} back={()=>navigate('projects')} mutate={mutate}/>}
+        {page==='project'&&(data.projects.some(project=>project.id===projectId)?<ProjectWorkspace data={data} user={user} projectId={projectId} initialWorkItemId={targetWorkItemId} initialHelpId={targetHelpId} back={()=>navigate('projects')} mutate={mutate}/>:<div className="page simple-page"><button className="secondary" onClick={()=>navigate('projects')}>Back to Projects</button><Empty>Project no longer exists.</Empty></div>)}
         {page==='work'&&<EmployeeWorkspace data={data} user={user} openProject={openProject} mutate={mutate} showAll/>} 
         {page==='people'&&<SimplePeople data={data} user={user} mutate={mutate}/>} 
         {page==='reports'&&<SimpleReports data={data} user={user}/>}</>

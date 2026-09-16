@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertCircle, ArrowLeft, ArrowRight, CalendarDays, Check, CircleHelp, Clock3, Edit3, Flag, MapPin, Plus, Send, Users, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, CalendarDays, Check, CircleHelp, Clock3, Edit3, Flag, MapPin, Plus, Send, Trash2, Users, X } from 'lucide-react';
 import type { AppData, Cycle, HelpRequest, Project, User, WorkItem, WorkStatus } from '../types';
 import { permissions } from '../permissions/permissions';
 import { workItemService } from '../services/workItemService';
@@ -8,7 +8,7 @@ import { updateService } from '../services/updateService';
 import { helpRequestService } from '../services/helpRequestService';
 import { connectedPeople } from '../domain/people';
 import { cycleService } from '../services/cycleService';
-import { projectService } from '../services/projectService';
+import { MAX_PROJECT_DELETION_OPERATIONS, projectDeletionImpact, projectService } from '../services/projectService';
 import { Avatar, Empty, minutesLabel, Progress, StatusPill } from './ui';
 import { employeeActiveWork, employeeWorkItems, isWorkItemOverdue, localDateKey, projectCardOrder, projectCardState, projectHealth, workItemAssigneeIds } from '../domain/selectors';
 
@@ -121,7 +121,39 @@ export function SimpleProject({data,user,projectId,initialWorkItemId,initialHelp
   return <div className="page simple-page project-register-simple"><button className="simple-back" onClick={back}><ArrowLeft size={15}/> Projects</button><header><div><p>{p.code}</p><h1>{p.name}</h1><span className="project-location"><MapPin size={15}/>{p.location||'—'}</span></div><div className="project-facts"><span><small>PROJECT LEAD</small><strong>{data.users.find(u=>u.id===p.leadId)?.name}</strong></span><span><small>CURRENT STAGE</small><strong>{p.currentStage}</strong></span></div></header><nav className="simple-stages">{p.stages.map((s,index)=>{const stageWork=stageItems(data,p,s.name).filter(w=>w.required!==false),complete=stageWork.length>0&&stageWork.every(w=>w.status==='Completed');return <button className={`${stage===s.name?'selected':''} ${complete?'complete':''}`} key={s.name} onClick={()=>setStage(s.name)}><i>{complete?<Check size={14}/>:String(index+1).padStart(2,'0')}</i><span>{s.name}<small>{complete?'Completed':s.name===p.currentStage?'Current':''}</small></span></button>})}</nav>{cycle&&<div className="cycle-line"><span><small>CURRENT CYCLE · {formatDate(cycle.startDate)}–{formatDate(cycle.endDate)}</small><strong>{cycle.direction}</strong></span><em>{cycleItems(data,p).filter(w=>w.status==='Completed').length}/{cycleItems(data,p).length} complete</em></div>}<section className="register-simple work-register"><div className="register-simple-title"><span><p>{stage.toUpperCase()}</p><h2>Deliverables</h2><small>{done} of {required.length} required complete</small></span>{canManage&&<button className="primary" onClick={()=>setAdd(true)}><Plus size={16}/> Add deliverable</button>}</div><div className="work-card-list">{items.map(item=><WorkRegisterCard key={item.id} item={item} data={data} user={user} canManage={canManage} mutate={mutate} openDetail={()=>setDetail(item)} openIssue={setIssue}/>)}{!items.length&&<Empty>No deliverables in this stage.</Empty>}</div></section>{archivedItems.length>0&&<section className="register-simple archived-register"><div className="register-simple-title"><span><p>ARCHIVED</p><h2>Removed deliverables</h2></span></div><div className="work-card-list">{archivedItems.map(item=><article className="archived-work-card" key={item.id}><strong>{item.name}</strong><span>{item.stageId||item.stage} · Archived</span></article>)}</div></section>}{issues.length>0&&<section className="issues-simple"><h2>Help & blockers</h2>{issues.map(h=><IssueRow key={h.id} help={h} data={data} user={user} mutate={mutate} open={()=>setIssue(h)}/>)}</section>}{detail&&<WorkDetail item={data.workItems.find(w=>w.id===detail.id)!} data={data} user={user} mutate={mutate} close={()=>setDetail(null)}/>} {add&&<AddDeliverable data={data} user={user} project={p} stage={stage} cycle={cycle} mutate={mutate} close={()=>setAdd(false)}/>} {issue&&<IssueModal help={data.helpRequests.find(h=>h.id===issue.id)!} data={data} user={user} mutate={mutate} close={()=>setIssue(null)}/>}</div>;
 }
 
-export function ProjectWorkspace(props:{data:AppData;user:User;projectId:string;initialWorkItemId?:string;initialHelpId?:string;back:()=>void;mutate:Mutate}){const project=props.data.projects.find(p=>p.id===props.projectId)!,canPlan=permissions.canManageProject(props.user,project),[planning,setPlanning]=useState(false);return <div className="project-workspace-wrap"><SimpleProject {...props}/><ProjectTeam data={props.data} user={props.user} project={project} mutate={props.mutate}/>{canPlan&&<button className="plan-cycle-fab" onClick={()=>setPlanning(true)}><Clock3 size={15}/> Plan cycle</button>}{planning&&<CyclePlan data={props.data} user={props.user} project={project} mutate={props.mutate} close={()=>setPlanning(false)}/>}</div>}
+export function ProjectWorkspace(props:{data:AppData;user:User;projectId:string;initialWorkItemId?:string;initialHelpId?:string;back:()=>void;mutate:Mutate}){
+  const project=props.data.projects.find(p=>p.id===props.projectId)!;
+  const canPlan=permissions.canManageProject(props.user,project);
+  const [planning,setPlanning]=useState(false),[deleting,setDeleting]=useState(false);
+  return <div className="project-workspace-wrap">
+    {permissions.canDeleteProject(props.user)&&<div className="project-deletion-control"><button className="project-delete-action" onClick={()=>setDeleting(true)}><Trash2 size={15}/> Delete project</button></div>}
+    <SimpleProject {...props}/>
+    <ProjectTeam data={props.data} user={props.user} project={project} mutate={props.mutate}/>
+    {canPlan&&<button className="plan-cycle-fab" onClick={()=>setPlanning(true)}><Clock3 size={15}/> Plan cycle</button>}
+    {planning&&<CyclePlan data={props.data} user={props.user} project={project} mutate={props.mutate} close={()=>setPlanning(false)}/>}
+    {deleting&&<DeleteProjectDialog data={props.data} user={props.user} project={project} mutate={props.mutate} close={()=>setDeleting(false)} done={props.back}/>}
+  </div>;
+}
+
+function DeleteProjectDialog({data,user,project,mutate,close,done}:{data:AppData;user:User;project:Project;mutate:Mutate;close:()=>void;done:()=>void}){
+  const [typedName,setTypedName]=useState('');
+  const impact=projectDeletionImpact(data,project.id);
+  const tooLarge=impact.operations>MAX_PROJECT_DELETION_OPERATIONS;
+  const confirm=(event:FormEvent)=>{
+    event.preventDefault();
+    if(typedName!==project.name||tooLarge||!permissions.canDeleteProject(user))return;
+    mutate(current=>projectService.deleteProject(current,user.id,project.id));
+    done();
+  };
+  return createPortal(<div className="simple-modal-backdrop" onMouseDown={close}><form className="simple-modal project-delete-confirm" onSubmit={confirm} onMouseDown={event=>event.stopPropagation()}>
+    <button type="button" className="simple-modal-close" onClick={close} aria-label="Cancel deletion"><X/></button>
+    <p className="modal-kicker">ADMIN ONLY · PERMANENT DELETION</p><h2>Delete {project.name}?</h2>
+    <p>This removes the project and its {impact.workItems} deliverables, {impact.helpRequests} help requests, {impact.updates} daily updates and {impact.cycles} cycles. Project-only reports and activity history will also be deleted. Reports covering other projects will retain those entries. This cannot be undone.</p>
+    {tooLarge&&<p className="auth-error">This project has too many linked records to delete safely in one operation. Contact an administrator for assisted cleanup.</p>}
+    <label>Type <strong>{project.name}</strong> to confirm<input autoFocus value={typedName} onChange={event=>setTypedName(event.target.value)} autoComplete="off"/></label>
+    <div className="project-delete-actions"><button type="button" className="secondary" onClick={close}>Cancel</button><button type="submit" className="project-delete-submit" disabled={typedName!==project.name||tooLarge}><Trash2 size={15}/> Delete project permanently</button></div>
+  </form></div>,document.body);
+}
 
 function ProjectTeam({data,user,project,mutate}:{data:AppData;user:User;project:Project;mutate:Mutate}){
   const [editing,setEditing]=useState(false),people=connectedPeople(data),employees=people.filter(person=>person.access==='employee'&&person.id!==project.leadId);

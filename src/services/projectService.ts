@@ -1,8 +1,54 @@
-import type { AppData, Project } from '../types';
+import type { AppData, DailyReport, Project } from '../types';
 import { makeId, now, withActivity } from './shared';
 import { permissions } from '../permissions/permissions';
 
+// Keep the project and its related records in a single atomic Firestore batch.
+export const MAX_PROJECT_DELETION_OPERATIONS = 400;
+
+function reportsAfterProjectRemoval(data:AppData, projectId:string) {
+  const removedUpdates=new Set(data.updates.filter(update=>update.projectId===projectId).map(update=>update.id));
+  const removedItems=new Set(data.workItems.filter(item=>item.projectId===projectId).map(item=>item.id));
+  let deleted=0, updated=0;
+  const reports=(data.dailyReports||[]).flatMap((report:DailyReport)=>{
+    const updateIds=report.updateIds.filter(id=>!removedUpdates.has(id));
+    const items=report.items?.filter(item=>!removedItems.has(item.workItemId));
+    if(updateIds.length===report.updateIds.length&&items?.length===report.items?.length)return [report];
+    if(!updateIds.length){deleted++;return []}
+    updated++;
+    return [{...report,updateIds,items}];
+  });
+  return {reports,deleted,updated};
+}
+
+export function projectDeletionImpact(data:AppData,projectId:string){
+  const reports=reportsAfterProjectRemoval(data,projectId);
+  const workItems=data.workItems.filter(item=>item.projectId===projectId).length;
+  const updates=data.updates.filter(update=>update.projectId===projectId).length;
+  const helpRequests=data.helpRequests.filter(request=>request.projectId===projectId).length;
+  const activities=data.activities.filter(activity=>activity.projectId===projectId).length;
+  const cycles=data.cycles.filter(cycle=>cycle.projectId===projectId).length;
+  const timeEntries=data.timeEntries.filter(entry=>entry.projectId===projectId).length;
+  return {workItems,updates,helpRequests,activities,cycles,timeEntries,reportsDeleted:reports.deleted,reportsUpdated:reports.updated,
+    operations:1+workItems+updates+helpRequests+activities+cycles+timeEntries+reports.deleted+reports.updated};
+}
+
 export const projectService = {
+  deleteProject(data:AppData, actorId:string, projectId:string):AppData {
+    const actor=data.users.find(user=>user.id===actorId);
+    if(!actor||!permissions.canDeleteProject(actor)||!data.projects.some(project=>project.id===projectId)
+      ||projectDeletionImpact(data,projectId).operations>MAX_PROJECT_DELETION_OPERATIONS)return data;
+    return {
+      ...data,
+      projects:data.projects.filter(project=>project.id!==projectId),
+      workItems:data.workItems.filter(item=>item.projectId!==projectId),
+      updates:data.updates.filter(update=>update.projectId!==projectId),
+      helpRequests:data.helpRequests.filter(request=>request.projectId!==projectId),
+      activities:data.activities.filter(activity=>activity.projectId!==projectId),
+      cycles:data.cycles.filter(cycle=>cycle.projectId!==projectId),
+      timeEntries:data.timeEntries.filter(entry=>entry.projectId!==projectId),
+      dailyReports:reportsAfterProjectRemoval(data,projectId).reports,
+    };
+  },
   create(data:AppData, actorId:string, input:{name:string;location?:string;principalId:string;leadId:string;teamIds?:string[];description?:string;deadline?:string}):AppData {
     const actor=data.users.find(u=>u.id===actorId); if(!actor||!permissions.canCreateProject(actor)) return data;
     const selected=[...new Set([...(input.teamIds||[]),input.leadId,actorId])];

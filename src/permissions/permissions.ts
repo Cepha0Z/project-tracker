@@ -8,6 +8,7 @@ export const permissions = {
   isProjectLead: (user:User, project:Project) => project.leadId===user.id,
   canViewProject: (user:User, project:Project) => user.access==='admin'||project.teamIds.includes(user.id),
   canManageProject: (user:User, project:Project) => user.access==='admin'||project.leadId===user.id,
+  canDeleteProject: (user:User) => user.access==='admin',
   canGiveDirection: (user:User, project:Project) => user.access==='admin'&&project.principalId===user.id,
   canManageTeam: (user:User, project:Project) => project.leadId===user.id||user.access==='admin',
   canAssignWork: (user:User, project:Project) => project.leadId===user.id||user.access==='admin',

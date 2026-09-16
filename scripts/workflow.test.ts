@@ -4,9 +4,10 @@ import { connectedPeople, displayActivityText, displayNameFromEmail, presentUser
 import { employeeActiveWork, projectCardOrder, projectCardState, projectHealth } from '../src/domain/selectors';
 import { notificationChanges } from '../src/services/notificationEvents';
 import { helpRequestService } from '../src/services/helpRequestService';
-import { projectService } from '../src/services/projectService';
+import { MAX_PROJECT_DELETION_OPERATIONS, projectDeletionImpact, projectService } from '../src/services/projectService';
 import { workItemService } from '../src/services/workItemService';
 import { updateService } from '../src/services/updateService';
+import { permissions } from '../src/permissions/permissions';
 import type { AppData, WorkItem } from '../src/types';
 
 function fixture():AppData {
@@ -88,4 +89,43 @@ assert.equal(claimed.workItems[0].cycleId,'old-cycle');
 assert.equal(claimed.workItems[0].dueDate,'2026-09-15');
 assert.equal(claimed.workItems[0].progress,40);
 assert.notEqual(updateService.createReport(claimed,'rahul',{summary:'Claimed work',entries:[{workItemId:'assigned-work',progress:50,status:'In Progress',note:'Worked'}]}),claimed);
+
+const deletionBase=fixture();
+const otherProject={...deletionBase.projects[0],id:'other-project',name:'Other Project'};
+const otherItem={...deletionBase.workItems[0],id:'other-work',projectId:'other-project'};
+const deletionData:AppData={...deletionBase,
+  projects:[...deletionBase.projects,otherProject],workItems:[...deletionBase.workItems,otherItem],
+  updates:[
+    {id:'update-v',projectId:'villa-60',workItemId:'assigned-work',userId:'rahul',text:'Villa',progress:40,minutes:0,status:'In Progress',createdAt:'2026-09-16T09:00:00Z'},
+    {id:'update-o',projectId:'other-project',workItemId:'other-work',userId:'rahul',text:'Other',progress:40,minutes:0,status:'In Progress',createdAt:'2026-09-16T09:00:00Z'},
+  ],
+  helpRequests:normal.helpRequests,
+  activities:[{id:'activity-v',projectId:'villa-60',actorId:'rahul',text:'Villa',createdAt:'2026-09-16T09:00:00Z'},
+    {id:'activity-o',projectId:'other-project',actorId:'rahul',text:'Other',createdAt:'2026-09-16T09:00:00Z'}],
+  cycles:structuredClone(seedData.cycles.filter(cycle=>cycle.projectId==='villa-60').slice(0,1)),
+  timeEntries:[{id:'time-v',projectId:'villa-60',workItemId:'assigned-work',userId:'rahul',date:'2026-09-16',minutes:30},
+    {id:'time-o',projectId:'other-project',workItemId:'other-work',userId:'rahul',date:'2026-09-16',minutes:20}],
+  dailyReports:[
+    {id:'report-mixed',userId:'rahul',date:'2026-09-16',summary:'Both',createdAt:'2026-09-16T09:00:00Z',updateIds:['update-v','update-o'],items:[
+      {workItemId:'assigned-work',previousProgress:20,newProgress:40,progressDelta:20,status:'In Progress'},
+      {workItemId:'other-work',previousProgress:20,newProgress:40,progressDelta:20,status:'In Progress'}]},
+    {id:'report-v',userId:'rahul',date:'2026-09-16',summary:'Villa',createdAt:'2026-09-16T09:00:00Z',updateIds:['update-v']},
+  ],
+};
+assert.equal(permissions.canDeleteProject(deletionData.users.find(user=>user.id==='manoj')!),true);
+assert.equal(permissions.canDeleteProject(deletionData.users.find(user=>user.id==='sudiksha')!),false);
+assert.equal(projectService.deleteProject(deletionData,'sudiksha','villa-60'),deletionData,'a project lead cannot delete a project');
+assert.equal(projectService.deleteProject(deletionData,'rahul','other-project'),deletionData,'an employee cannot delete a project');
+assert.equal(projectDeletionImpact(deletionData,'villa-60').reportsUpdated,1);
+assert.equal(projectDeletionImpact(deletionData,'villa-60').reportsDeleted,1);
+const removed=projectService.deleteProject(deletionData,'manoj','villa-60');
+assert.deepEqual(removed.projects.map(project=>project.id),['other-project']);
+for(const group of ['workItems','updates','helpRequests','activities','cycles','timeEntries'] as const)
+  assert.ok(removed[group].every(entity=>entity.projectId!=='villa-60'),`${group} has no orphaned project records`);
+assert.deepEqual(removed.dailyReports?.map(report=>report.id),['report-mixed']);
+assert.deepEqual(removed.dailyReports?.[0].updateIds,['update-o'],'a mixed report retains unrelated history');
+assert.deepEqual(removed.dailyReports?.[0].items?.map(item=>item.workItemId),['other-work']);
+assert.equal(removed.workItems[0].id,'other-work');
+const oversized={...deletionData,activities:[...deletionData.activities,...Array.from({length:MAX_PROJECT_DELETION_OPERATIONS},(_,index)=>({id:`extra-${index}`,projectId:'villa-60',actorId:'rahul',text:'History',createdAt:'2026-09-16T09:00:00Z'}))]};
+assert.equal(projectService.deleteProject(oversized,'manoj','villa-60'),oversized,'oversized projects require assisted deletion rather than a partial batch');
 console.log('Workflow service tests passed.');

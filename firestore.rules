@@ -213,7 +213,20 @@ service cloud.firestore {
     match /dailyReports/{id} {
       allow read: if activeUser();
       allow create: if activeUser() && request.resource.data.userId == userId();
-      allow update: if false;
+      // An admin removing a project may trim only that project's entries from
+      // a report spanning multiple projects; the remaining history stays intact.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updateIds', 'items'])
+        && request.resource.data.updateIds.size() > 0
+        && resource.data.updateIds.hasAll(request.resource.data.updateIds)
+        && request.resource.data.updateIds.size() < resource.data.updateIds.size()
+        && (
+          !resource.data.keys().hasAny(['items'])
+          || (
+            request.resource.data.keys().hasAny(['items'])
+            && resource.data.items.hasAll(request.resource.data.items)
+          )
+        );
       allow delete: if isAdmin();
     }
 

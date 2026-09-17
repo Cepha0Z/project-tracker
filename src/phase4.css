@@ -83,3 +83,27 @@
 .project-register-simple>header.project-red{border-top:4px solid #de5145}.project-register-simple>header.project-yellow{border-top:4px solid #e8c535}.project-register-simple>header.project-green{border-top:4px solid #52bb71}.project-register-simple>header.project-black{border-top:4px solid #29322e}
 .project-health-label{margin-top:12px;font-size:11px}
 @media(max-width:600px){.overview-group-count{white-space:normal;justify-content:flex-end;text-align:right}.simple-stages button.current{outline:1px solid #4d8e64}}
+
+/* Home is an overview: one pastel project shell with compact, read-only child rows. */
+.overview-projects .project-work-group{margin-bottom:22px;border-radius:6px;box-shadow:none}
+.overview-projects .project-group-head{padding:21px 27px;min-height:95px}
+.overview-projects .project-group-head strong{font-size:21px;line-height:1.2;font-weight:750}
+.overview-projects .project-group-head em{font-size:12px;font-weight:400}
+.overview-projects .overview-group-count{font-size:11px;font-weight:500;color:#58645c}
+.overview-projects .overview-work-row{padding:12px 27px;min-height:62px;gap:16px}
+.overview-projects .overview-work-name strong{font-size:14px;font-weight:700}
+.overview-projects .overview-work-name small,.overview-projects .overview-work-due{font-size:11px;font-weight:400}
+.overview-projects .overview-red{background:#fff0ed;border-color:#d75a50}
+.overview-projects .overview-red>.project-group-head{background:#ffe9e5}
+.overview-projects .overview-yellow{background:#fff9e8;border-color:#e2bd34}
+.overview-projects .overview-yellow>.project-group-head{background:#fff2ce}
+.overview-projects .overview-green{background:#f0faf2;border-color:#53b975}
+.overview-projects .overview-green>.project-group-head{background:#e6f8eb}
+.overview-projects .overview-black{background:#f2f3f2;border-color:#404a44}
+.overview-projects .overview-black>.project-group-head{background:#e8ebe8}
+.overview-projects .overview-work-row.item-red{background:#fff0ed}
+.overview-projects .overview-work-row.item-yellow{background:#fff8e2}
+.overview-projects .overview-work-row.item-green{background:#edf9f0}
+.overview-projects .overview-work-row.item-neutral{background:#fff}
+.work-card-actions .work-detail-link{border:1px solid #d5dcd6;background:#fff;color:#536159;padding:9px 12px;font-size:11px}
+@media(max-width:600px){.overview-projects .project-group-head{padding:17px 18px;min-height:82px}.overview-projects .project-group-head strong{font-size:18px}.overview-projects .overview-work-row{padding:13px 16px;gap:8px 12px}}

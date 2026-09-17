@@ -42,6 +42,7 @@ export default function App(){
   const [projectId,setProjectId]=useState(()=>initialTarget.get('project')||'villa-60');
   const [targetWorkItemId,setTargetWorkItemId]=useState<string|undefined>(()=>initialTarget.get('workItem')||undefined);
   const [targetHelpId,setTargetHelpId]=useState<string|undefined>(()=>initialTarget.get('help')||undefined);
+  const [openDetailOnEntry,setOpenDetailOnEntry]=useState(true);
   const [targetReportId,setTargetReportId]=useState<string|undefined>(()=>initialTarget.get('report')||undefined);
   const [targetUpdateId,setTargetUpdateId]=useState<string|undefined>(()=>initialTarget.get('update')||undefined);
   const [foregroundNotification,setForegroundNotification]=useState<ForegroundNotification|null>(null);
@@ -52,8 +53,9 @@ export default function App(){
   const user=sessionUser?{...(storedUser||sessionUser),access:sessionUser.access}:null;
   const mutate:Mutate=fn=>{const before=data,next=fn(before);if(next===before)return;setData(next);repository.save(next,before).then(()=>{void helpNotificationService.dispatchChanges(before,next).then(()=>setSyncError('')).catch(error=>setSyncError(error instanceof Error?error.message:'Saved, but notification delivery failed.'))}).catch(error=>{setSyncError(error instanceof Error?error.message:'Unable to save changes.');setData(before)})};
   const navigate=(next:Page)=>{if(next==='reports'){setTargetReportId(undefined);setTargetUpdateId(undefined)}setPage(next);setMenuOpen(false)};
-  const openProject=(id:string)=>{setProjectId(id);setTargetWorkItemId(undefined);setTargetHelpId(undefined);navigate('project')};
-  const openWorkItem=(linkedProject:string,itemId:string,helpId?:string)=>{setProjectId(linkedProject);setTargetWorkItemId(itemId||undefined);setTargetHelpId(helpId);navigate('project')};
+  const openProject=(id:string)=>{setProjectId(id);setTargetWorkItemId(undefined);setTargetHelpId(undefined);setOpenDetailOnEntry(false);navigate('project')};
+  const openWorkItem=(linkedProject:string,itemId:string,helpId?:string)=>{setProjectId(linkedProject);setTargetWorkItemId(itemId||undefined);setTargetHelpId(helpId);setOpenDetailOnEntry(!helpId);navigate('project')};
+  const openOverviewItem=(linkedProject:string,itemId:string,helpId?:string)=>{setProjectId(linkedProject);setTargetWorkItemId(itemId);setTargetHelpId(helpId);setOpenDetailOnEntry(false);navigate('project')};
   const openReport=(reportId:string,updateId:string)=>{navigate('reports');setTargetReportId(reportId);setTargetUpdateId(updateId||undefined)};
   const openNotification=()=>{if(!foregroundNotification)return;const target=new URL(foregroundNotification.url,window.location.origin),reportId=target.searchParams.get('report'),linkedProject=target.searchParams.get('project');if(reportId){openReport(reportId,target.searchParams.get('update')||'')}else if(linkedProject){openWorkItem(linkedProject,target.searchParams.get('workItem')||'',target.searchParams.get('help')||undefined)}setForegroundNotification(null)};
   if(!authReady)return <div className="firebase-loading"><span/><strong>Connecting to Studio Projects…</strong></div>;
@@ -75,10 +77,10 @@ export default function App(){
         {syncError&&<div className="sync-error"><AlertCircle size={16}/>{syncError}</div>}
         {foregroundNotification&&<button className="foreground-notification" onClick={openNotification}><Bell size={17}/><span><strong>{foregroundNotification.title}</strong><small>{foregroundNotification.body}</small></span><ArrowRight size={15}/></button>}
         <>
-        {page==='home'&&(isPrincipal?<PrincipalOverview data={data} openWorkItem={openWorkItem}/>:<EmployeeWorkspace data={data} user={user} openWorkItem={openWorkItem} mutate={mutate}/>)}
+        {page==='home'&&(isPrincipal?<PrincipalOverview data={data} openWorkItem={openOverviewItem}/>:<EmployeeWorkspace data={data} user={user} openWorkItem={openOverviewItem} mutate={mutate}/>)}
         {page==='projects'&&<CompactProjects data={data} user={user} openProject={openProject} mutate={mutate}/>} 
-        {page==='project'&&(data.projects.some(project=>project.id===projectId)?<ProjectWorkspace data={data} user={user} projectId={projectId} initialWorkItemId={targetWorkItemId} initialHelpId={targetHelpId} back={()=>navigate('projects')} mutate={mutate}/>:<div className="page simple-page"><button className="secondary" onClick={()=>navigate('projects')}>Back to Projects</button><Empty>Project no longer exists.</Empty></div>)}
-        {page==='work'&&<EmployeeWorkspace data={data} user={user} openWorkItem={openWorkItem} mutate={mutate} showAll/>}
+        {page==='project'&&(data.projects.some(project=>project.id===projectId)?<ProjectWorkspace data={data} user={user} projectId={projectId} initialWorkItemId={targetWorkItemId} initialHelpId={targetHelpId} openDetailOnEntry={openDetailOnEntry} back={()=>navigate('projects')} mutate={mutate}/>:<div className="page simple-page"><button className="secondary" onClick={()=>navigate('projects')}>Back to Projects</button><Empty>Project no longer exists.</Empty></div>)}
+        {page==='work'&&<EmployeeWorkspace data={data} user={user} openWorkItem={openOverviewItem} mutate={mutate} showAll/>}
         {page==='people'&&<SimplePeople data={data} user={user} mutate={mutate}/>} 
         {page==='reports'&&<SimpleReports data={data} user={user} focusReportId={targetReportId} focusUpdateId={targetUpdateId}/>}
         {page==='notifications'&&<NotificationCenter data={data} user={user} openHelp={openWorkItem} openReport={openReport}/>}</>
@@ -94,7 +96,7 @@ function Login({externalError}:{externalError:string}){
 }
 
 const projectLocations:Record<string,string>={'villa-60':'Bangalore',kgf:'Kolar',casa:'Bangalore'};
-function PrincipalOverview({data,openWorkItem}:{data:AppData;openWorkItem:(projectId:string,itemId:string)=>void}){
+function PrincipalOverview({data,openWorkItem}:{data:AppData;openWorkItem:(projectId:string,itemId:string,helpId?:string)=>void}){
   const projects=[...data.projects].sort((a,b)=>projectCardOrder[projectCardState(data,a)]-projectCardOrder[projectCardState(data,b)]);
   const work=data.workItems.filter(item=>!item.archived),attention=projects.filter(project=>projectCardState(data,project)==='red').length,delayed=projects.filter(project=>projectCardState(data,project)==='yellow').length;
   const onTrack=projects.filter(project=>projectHealth(data,project)==='On Track').length,completed=projects.filter(project=>projectHealth(data,project)==='Completed').length;

@@ -45,12 +45,12 @@ export function currentProjectStage(data: AppData, project: Project) {
 }
 
 export function projectHealth(data: AppData, project: Project, date = localDateKey()): ProjectHealth {
-  const required = projectWorkItems(data, project.id).filter(item => item.required !== false);
+  const items = projectWorkItems(data, project.id);
   const unresolvedHelp = data.helpRequests.some(request =>
     request.projectId === project.id && request.status !== 'Resolved',
   );
-  if (unresolvedHelp || required.some(item => item.status === 'Blocked')) return 'Need Attention';
-  if (required.some(item => isWorkItemOverdue(item, date))) return 'Delayed';
+  if (unresolvedHelp || items.some(item => item.status === 'Blocked')) return 'Need Attention';
+  if (items.some(item => isWorkItemOverdue(item, date))) return 'Delayed';
   if (currentProjectStage(data, project) === null) return 'Completed';
   return 'On Track';
 }

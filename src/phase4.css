@@ -107,3 +107,74 @@
 .overview-projects .overview-work-row.item-neutral{background:#fff}
 .work-card-actions .work-detail-link{border:1px solid #d5dcd6;background:#fff;color:#536159;padding:9px 12px;font-size:11px}
 @media(max-width:600px){.overview-projects .project-group-head{padding:17px 18px;min-height:82px}.overview-projects .project-group-head strong{font-size:18px}.overview-projects .overview-work-row{padding:13px 16px;gap:8px 12px}}
+
+/* Readability pass: retain the established palette and layout, but make the hierarchy legible. */
+:root{--muted:#59655e;--line:#cbd2cc}
+.sidebar nav button,.logout{color:#d0dbd4}
+.profile-switch small{color:#c1cfc6}
+.crumb{font-size:13px;color:#59635d}
+.crumb strong{color:#263a2e}
+.simple-title p,.employee-simple-head p,.register-simple-title p,.modal-kicker{font-size:11px;color:#655943}
+.employee-simple-head>div>span,.simple-title>span{color:#536159}
+.employee-work-summary{border-color:var(--line)}
+.employee-work-summary span{font-size:12px;color:#435148}
+.employee-work-summary b{font-size:20px}
+.boss-overview-head>div:first-child p,.boss-metrics small{color:#536159}
+.boss-metrics small{font-size:12px}
+.employee-home-section{margin-top:28px}
+.employee-home-section+.employee-home-section{margin-top:38px}
+.employee-home-section h2{font-size:18px;line-height:1.3;margin:0 0 14px;color:#20372f;font-weight:750}
+.employee-home-section .overview-projects{margin-top:0}
+.employee-home-section .empty-state{border:1px solid var(--line);background:#fff;color:#536159}
+.overview-projects .project-work-group{border-top:1px solid;border-right:1px solid;border-bottom:1px solid;border-left-width:4px}
+.overview-projects .project-group-head>span:first-child,.overview-projects .overview-work-name{min-width:0}
+.overview-projects .project-group-head strong{font-size:23px;color:#18251d}
+.overview-projects .project-group-head strong,.overview-projects .overview-work-name strong{overflow-wrap:anywhere}
+.overview-projects .project-group-head em{font-size:13px;color:#405248}
+.overview-projects .overview-group-count{font-size:13px;color:#34483a;font-weight:650}
+.overview-projects .overview-work-row{border-top-color:#ccd4cd;color:#202b23}
+.overview-projects .overview-work-name strong{font-size:16px;line-height:1.3}
+.overview-projects .overview-work-name small{font-size:12px;color:#526258}
+.overview-projects .overview-work-due{font-size:12px;color:#46564b}
+.overview-projects .overview-work-due em{color:#982d25}
+.overview-projects .overview-work-meter b{font-size:14px}
+.overview-projects .overview-work-meter>i{height:7px;background:#d7ddd8}
+.overview-projects .overview-red,.overview-projects .overview-red>.project-group-head,.overview-projects .overview-work-row.item-red{background:#fbe2de;border-color:#d98c83}
+.overview-projects .overview-yellow,.overview-projects .overview-yellow>.project-group-head,.overview-projects .overview-work-row.item-yellow{background:#fff5c7;border-color:#e8c535}
+.overview-projects .overview-green,.overview-projects .overview-green>.project-group-head,.overview-projects .overview-work-row.item-green{background:#eaf8ee;border-color:#52bb71}
+.overview-projects .overview-work-row.item-neutral{background:#fff}
+.compact-projects strong{font-size:17px;color:#1e2c23}
+.compact-projects>button>span,.compact-lead b{font-size:13px}
+.compact-projects small,.compact-project-head{font-size:11px;color:#56645a}
+.simple-status{font-size:12px;font-weight:700}
+.simple-status.need-attention{background:#f8ddda;color:#982d25}
+.simple-status.delayed{background:#fff1a3;color:#655000}
+.simple-status.on-track{background:#d7f5dc;color:#205b39}
+.work-card-title strong{font-size:21px}
+.work-card-meta small,.work-card-progress small,.project-register-simple header small,.project-team-simple small{font-size:10px;color:#546158}
+.work-card-meta .register-people>span,.due-block b,.project-team-simple strong{font-size:14px}
+.due-block.overdue b,.due-block.overdue em{color:#8f3f18}
+.register-simple-title h2,.issues-simple h2{font-size:25px}
+.work-essentials strong,.assigned-readonly strong,.scope-simple p{font-size:13px}
+.detail-progress-direct small,.work-essentials small,.scope-simple>small,.assigned-readonly small,.issue-brief-simple small,.assign-simple>small{font-size:10px;color:#546158}
+.simple-modal>label,.help-inline>label,.report-work-fields>label{font-size:12px;color:#2f3d33}
+.issue-brief-simple p,.report-work strong,.notification-open{font-size:13px}
+.report-work small,.notification-work article>small,.notification-project-title span{font-size:12px;color:#526258}
+.people-simple>article,.daily-feed time{font-size:13px;color:#29372e}
+.notification-message p,.feed-copy p{color:#29372e}
+@media(max-width:1000px){
+  .overview-projects .overview-work-row{grid-template-columns:minmax(0,1fr) minmax(92px,30%) 18px;gap:8px 12px}
+  .overview-work-name{grid-column:1;grid-row:1}
+  .overview-work-due{grid-column:1;grid-row:2}
+  .overview-work-meter{grid-column:2;grid-row:1/3;min-width:0;gap:6px}
+  .overview-work-row>svg{grid-column:3;grid-row:1/3}
+}
+@media(max-width:600px){
+  .overview-projects .project-group-head strong{font-size:19px}
+  .overview-projects .overview-group-count{font-size:11px}
+  .overview-projects .overview-work-row{gap:8px;padding:13px 14px}
+  .overview-projects .overview-work-name strong{font-size:15px}
+  .overview-projects .overview-work-meter b{font-size:12px;min-width:30px}
+  .employee-home-section h2{font-size:17px}
+  .work-card-title strong{font-size:19px}
+}

@@ -10,7 +10,7 @@ import { MAX_PROJECT_DELETION_OPERATIONS, projectDeletionImpact, projectService 
 import { workItemService } from '../src/services/workItemService';
 import { updateService } from '../src/services/updateService';
 import { permissions } from '../src/permissions/permissions';
-import { OverviewProjectGroups, SimplePeople, SimpleProject } from '../src/components/phase4';
+import { EmployeeWorkspace, OverviewProjectGroups, SimplePeople, SimpleProject } from '../src/components/phase4';
 import type { AppData, WorkItem } from '../src/types';
 
 function fixture():AppData {
@@ -61,6 +61,17 @@ const overviewHtml=renderToStaticMarkup(createElement(OverviewProjectGroups,{dat
 assert.ok(overviewHtml.includes('overview-yellow')&&overviewHtml.includes('item-yellow'),'delayed project and unfinished overdue work carry yellow card classes');
 assert.ok(!overviewHtml.includes('type="range"')&&!overviewHtml.includes('Start work')&&!overviewHtml.includes('Need help')&&!overviewHtml.includes('>Resolve<')&&!overviewHtml.includes('>Escalate<'),'Home project rows contain no work controls');
 assert.ok(overviewHtml.includes('aria-expanded="true"'),'Home project groups are expanded initially');
+const employeeOverviewData={...base,projects:[...base.projects,{...base.projects[0],id:'test-2',name:'Test 2',teamIds:['sudiksha']}],workItems:[...base.workItems,{...base.workItems[0],id:'unrelated-work',projectId:'test-2',name:'Unrelated deliverable',assigneeId:'sudiksha',assigneeIds:['sudiksha'],status:'Blocked' as const}]};
+const employeeHomeHtml=renderToStaticMarkup(createElement(EmployeeWorkspace,{data:employeeOverviewData,user:base.users.find(user=>user.id==='rahul')!,openWorkItem:()=>{},mutate:()=>{}}));
+const myWorkHtml=employeeHomeHtml.slice(employeeHomeHtml.indexOf('employee-home-section employee-my-work'),employeeHomeHtml.indexOf('employee-home-section employee-all-projects'));
+const allProjectsHtml=employeeHomeHtml.slice(employeeHomeHtml.indexOf('employee-home-section employee-all-projects'));
+assert.ok(myWorkHtml.includes('Villa 60')&&!myWorkHtml.includes('Test 2')&&!myWorkHtml.includes('Unrelated deliverable'),'My Work includes only projects and items assigned to the employee, even when another project is red');
+assert.ok(allProjectsHtml.includes('Villa 60')&&allProjectsHtml.includes('Test 2')&&allProjectsHtml.includes('Unrelated deliverable'),'All Projects includes the same company projects regardless of assignment');
+assert.ok(!myWorkHtml.includes('type="range"')&&!allProjectsHtml.includes('type="range"')&&!myWorkHtml.includes('Start work')&&!allProjectsHtml.includes('Start work')&&!myWorkHtml.includes('Need help')&&!allProjectsHtml.includes('Need help'),'both Employee Home project sections remain read-only');
+const myWorkPageHtml=renderToStaticMarkup(createElement(EmployeeWorkspace,{data:employeeOverviewData,user:base.users.find(user=>user.id==='rahul')!,openWorkItem:()=>{},mutate:()=>{},showAll:true}));
+assert.ok(!myWorkPageHtml.includes('All Projects')&&!myWorkPageHtml.includes('Test 2'),'the existing My Work navigation stays assignment-only');
+const noAssignmentHtml=renderToStaticMarkup(createElement(EmployeeWorkspace,{data:employeeOverviewData,user:base.users.find(user=>user.id==='siddharth')!,openWorkItem:()=>{},mutate:()=>{}}));
+assert.ok(noAssignmentHtml.includes('No work assigned.')&&noAssignmentHtml.slice(noAssignmentHtml.indexOf('employee-home-section employee-all-projects')).includes('Test 2'),'an employee with no assignments still sees company projects only in All Projects');
 const overviewProjectOnly=renderToStaticMarkup(createElement(SimpleProject,{data:base,user:base.users[0],projectId:'villa-60',initialWorkItemId:'assigned-work',openDetailOnEntry:false,back:()=>{},mutate:()=>{}}));
 assert.ok(overviewProjectOnly.includes('DOCUMENTATION')&&!overviewProjectOnly.includes('work-detail-simple'),'normal Home navigation selects the project section without opening editable detail');
 const explicitDetail=renderToStaticMarkup(createElement(SimpleProject,{data:base,user:base.users[0],projectId:'villa-60',initialWorkItemId:'assigned-work',openDetailOnEntry:true,back:()=>{},mutate:()=>{}}));

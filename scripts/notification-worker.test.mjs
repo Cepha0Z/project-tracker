@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { adminUserIds, dailyReportUrl, indiaDateKey, sendMissingReportReminders, sendToUsers } from '../cf-test-worker.js';
+import { adminUserIds, dailyReportUrl, indiaDateKey, sendDailyReportNotification, sendMissingReportReminders, sendToUsers } from '../cf-test-worker.js';
 
 const originalFetch=globalThis.fetch;
 const doc=(collection,id,fields)=>({name:`projects/test/databases/(default)/documents/${collection}/${id}`,fields:Object.fromEntries(Object.entries(fields).map(([key,value])=>[key,typeof value==='boolean'?{booleanValue:value}:{stringValue:String(value)}]))});
@@ -43,10 +43,12 @@ globalThis.fetch=async(input,options={})=>{
   if(url.includes('/documents/users/'))return users[url.split('/').at(-1)]?Response.json(users[url.split('/').at(-1)]):new Response(null,{status:404});
   if(url.includes('/messages:send')){sends++;lastPush=JSON.parse(options.body).message;return invalidToken?Response.json({error:{details:[{'@type':'type.googleapis.com/google.firebase.fcm.v1.FcmError',errorCode:'UNREGISTERED'}]}},{status:404}):Response.json({name:'mock-fcm-message'});}
   if(url.includes('/notificationDevices/device-1')&&options.method==='PATCH'){disabled++;return Response.json(device);}
+  if(url.includes('/documents/dailyReports/')){const report=reports.find(entry=>entry.name.endsWith(`/${url.split('/').at(-1)}`));return report?Response.json(report):new Response(null,{status:404});}
   throw new Error(`Unexpected test request: ${url}`);
 };
 try{
   assert.equal(dailyReportUrl('report 1','update/1'),'https://nebulous-project--tracker.web.app/?report=report%201&update=update%2F1','daily push opens its exact Reports entry');
+  assert.equal(dailyReportUrl('custom report'),'https://nebulous-project--tracker.web.app/?report=custom%20report','custom-only report push opens Reports without a fake update');
   const recipients=await adminUserIds({FIREBASE_PROJECT_ID:'test'},'fake-access-token');
   assert.deepEqual(recipients,['manoj','kiran'],'admin lookup excludes project leads');
   const delivered=await sendToUsers({FIREBASE_PROJECT_ID:'test'},'fake-access-token',recipients,{title:'Test',body:'Test',url:'https://example.com',tag:'test'});
@@ -74,5 +76,12 @@ try{
   assert.equal(nextDay.noDevices,1,'an employee without a device does not fail the job');
   assert.equal(nextDay.sent,1,'a new India day starts a new reminder eligibility period');
   assert.equal(sends,before+2,'admins never receive reminder pushes');
+  reports=[{...doc('dailyReports','custom-report',{userId:'cepha',date:'2026-09-17',customWork:'Visited the site for measurements.'}),fields:{userId:{stringValue:'cepha'},date:{stringValue:'2026-09-17'},customWork:{stringValue:'Visited the site for measurements.'},updateIds:{arrayValue:{values:[]}}}}];
+  const denied=await sendDailyReportNotification(new Request('https://example.com/notify'),{FIREBASE_PROJECT_ID:'test'},'fake-access-token',{userId:'sudiksha',access:'employee'},'custom-report');
+  assert.equal(denied.status,403,'another employee cannot trigger a custom-report push');
+  const customResponse=await sendDailyReportNotification(new Request('https://example.com/notify'),{FIREBASE_PROJECT_ID:'test'},'fake-access-token',{userId:'cepha',access:'employee'},'custom-report');
+  assert.equal(customResponse.status,200,'a custom-only daily report is a valid notification event');
+  assert.equal(lastPush.webpush.fcm_options.link,dailyReportUrl('custom-report'));
+  assert.ok(lastPush.notification.body.includes('Visited the site for measurements.'));
   console.log('Notification Worker tests passed.');
 }finally{globalThis.fetch=originalFetch;}

@@ -159,14 +159,20 @@ service cloud.firestore {
         request.resource.data.createdBy == userId()
         && request.resource.data.teamIds.hasAny([userId()])
       )) && request.resource.data.teamIds.hasAny([request.resource.data.leadId]);
-      allow update: if canManageProject(id)
-        && request.resource.data.teamIds.hasAny([request.resource.data.leadId]);
+      allow update: if activeUser() && request.resource.data.teamIds.hasAny([request.resource.data.leadId])
+        && (canManageProject(id) || (
+          isProjectMember(id)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stages', 'currentStage'])
+          && request.resource.data.stages is list
+          && request.resource.data.stages.size() > 0
+          && request.resource.data.stages.size() <= 50
+        ));
       allow delete: if isAdmin();
     }
 
     match /workItems/{id} {
       allow read: if activeUser();
-      allow create: if activeUser() && canManageFutureProject(request.resource.data.projectId)
+      allow create: if activeUser() && isProjectMember(request.resource.data.projectId)
         && futureProject(request.resource.data.projectId).teamIds.hasAll(request.resource.data.assigneeIds)
         && request.resource.data.assigneeIds.hasAny([request.resource.data.assigneeId]);
       allow update: if activeUser()
@@ -183,6 +189,11 @@ service cloud.firestore {
         )
         && (
         (canManageProject(resource.data.projectId) && resource.data.status != 'Blocked')
+        || (
+          isProjectMember(resource.data.projectId)
+          && request.resource.data.stage == request.resource.data.stageId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stage', 'stageId'])
+        )
         || (
           isWorkItemAssignee(id)
           && resource.data.status != 'Blocked'
@@ -242,7 +253,14 @@ service cloud.firestore {
       // a report spanning multiple projects; the remaining history stays intact.
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updateIds', 'items'])
-        && request.resource.data.updateIds.size() > 0
+        && (
+          request.resource.data.updateIds.size() > 0
+          || (
+            request.resource.data.keys().hasAny(['customWork'])
+            && request.resource.data.customWork is string
+            && request.resource.data.customWork.size() > 0
+          )
+        )
         && resource.data.updateIds.hasAll(request.resource.data.updateIds)
         && request.resource.data.updateIds.size() < resource.data.updateIds.size()
         && (

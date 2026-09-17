@@ -1,6 +1,7 @@
 import type { AppData, DailyReport, Project } from '../types';
 import { makeId, now, withActivity } from './shared';
 import { permissions } from '../permissions/permissions';
+import { PROJECT_STAGE_ORDER, currentProjectStage } from '../domain/selectors';
 
 // Keep the project and its related records in a single atomic Firestore batch.
 export const MAX_PROJECT_DELETION_OPERATIONS = 400;
@@ -13,7 +14,7 @@ function reportsAfterProjectRemoval(data:AppData, projectId:string) {
     const updateIds=report.updateIds.filter(id=>!removedUpdates.has(id));
     const items=report.items?.filter(item=>!removedItems.has(item.workItemId));
     if(updateIds.length===report.updateIds.length&&items?.length===report.items?.length)return [report];
-    if(!updateIds.length){deleted++;return []}
+    if(!updateIds.length&&!report.customWork?.trim()){deleted++;return []}
     updated++;
     return [{...report,updateIds,items}];
   });
@@ -55,7 +56,7 @@ export const projectService = {
     if(![input.principalId,input.leadId,...selected].every(id=>data.users.some(u=>u.id===id&&u.authUid&&u.active!==false&&u.loginEnabled!==false)))return data;
     const id=makeId('project');
     const teamIds=selected;
-    const project:Project={id,name:input.name.trim(),location:input.location?.trim()||'',code:input.name.trim().split(/\s+/).map(x=>x[0]).join('').slice(0,4).toUpperCase(),description:input.description||'',focus:'Brief and project planning',principalId:input.principalId,leadId:input.leadId,teamIds,currentStage:'Brief',deadline:input.deadline||'',deadlineLabel:'—',health:'On Track',stages:['Brief','Concept Design','Design Development','Documentation','Production','Procurement','Site Stage'].map((name,i)=>({name,state:i===0?'current':'next'})),cycle:{label:'Not planned',direction:'Awaiting project planning.',deadline:'Not set'},notes:[],createdBy:actorId,createdAt:now()};
+    const project:Project={id,name:input.name.trim(),location:input.location?.trim()||'',code:input.name.trim().split(/\s+/).map(x=>x[0]).join('').slice(0,4).toUpperCase(),description:input.description||'',focus:'Brief and project planning',principalId:input.principalId,leadId:input.leadId,teamIds,currentStage:'Brief',deadline:input.deadline||'',deadlineLabel:'—',health:'On Track',stages:PROJECT_STAGE_ORDER.map((name,i)=>({name,state:i===0?'current':'next'})),cycle:{label:'Not planned',direction:'Awaiting project planning.',deadline:'Not set'},notes:[],createdBy:actorId,createdAt:now()};
     return withActivity({...data,projects:[...data.projects,project]},id,actorId,`created project ${project.name}`);
   },
   update(data:AppData, actorId:string, projectId:string, changes:Partial<Project>):AppData {
@@ -63,6 +64,28 @@ export const projectService = {
     const actor=data.users.find(u=>u.id===actorId); if(!actor||!permissions.canManageProject(actor,before)) return data;
     const next={...data,projects:data.projects.map(p=>p.id===projectId?updated:p)};
     return withActivity(next,projectId,actorId,`updated project information`);
+  },
+  addSection(data:AppData, actorId:string, projectId:string, name:string):AppData {
+    const project=data.projects.find(p=>p.id===projectId),actor=data.users.find(u=>u.id===actorId),label=name.trim();
+    if(!project||!actor||!permissions.canEditSections(actor,project)||!label||label.length>80||project.stages.length>=50||project.stages.some(stage=>stage.name.toLowerCase()===label.toLowerCase()))return data;
+    const updated={...project,stages:[...project.stages,{name:label,state:'next' as const}]};
+    updated.currentStage=currentProjectStage(data,updated)||updated.currentStage;
+    return withActivity({...data,projects:data.projects.map(p=>p.id===projectId?updated:p)},projectId,actorId,`added section ${label}`);
+  },
+  renameSection(data:AppData, actorId:string, projectId:string, oldName:string, name:string):AppData {
+    const project=data.projects.find(p=>p.id===projectId),actor=data.users.find(u=>u.id===actorId),label=name.trim();
+    if(!project||!actor||!permissions.canEditSections(actor,project)||!label||label.length>80||!project.stages.some(stage=>stage.name===oldName)||project.stages.some(stage=>stage.name.toLowerCase()===label.toLowerCase()&&stage.name!==oldName))return data;
+    if(label===oldName)return data;
+    const updated={...project,stages:project.stages.map(stage=>stage.name===oldName?{...stage,name:label}:stage),currentStage:project.currentStage===oldName?label:project.currentStage};
+    const next={...data,projects:data.projects.map(p=>p.id===projectId?updated:p),workItems:data.workItems.map(item=>item.projectId===projectId&&(item.stageId||item.stage)===oldName?{...item,stage:label,stageId:label}:item)};
+    return withActivity(next,projectId,actorId,`renamed section ${oldName} to ${label}`);
+  },
+  deleteSection(data:AppData, actorId:string, projectId:string, name:string):AppData {
+    const project=data.projects.find(p=>p.id===projectId),actor=data.users.find(u=>u.id===actorId);
+    if(!project||!actor||!permissions.canEditSections(actor,project)||project.stages.length<=1||!project.stages.some(stage=>stage.name===name)||data.workItems.some(item=>item.projectId===projectId&&(item.stageId||item.stage)===name))return data;
+    const updated={...project,stages:project.stages.filter(stage=>stage.name!==name)};
+    updated.currentStage=currentProjectStage(data,updated)||updated.stages.at(-1)!.name;
+    return withActivity({...data,projects:data.projects.map(p=>p.id===projectId?updated:p)},projectId,actorId,`deleted empty section ${name}`);
   },
   setStage(data:AppData, actorId:string, projectId:string, stageName:string):AppData {
     const project=data.projects.find(p=>p.id===projectId)!; const old=project.currentStage; const idx=project.stages.findIndex(s=>s.name===stageName);

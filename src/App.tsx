@@ -62,8 +62,7 @@ export default function App(){
   if(!user)return <Login externalError={syncError}/>;
   if(!dataReady)return <div className="firebase-loading"><span/><strong>Loading your workspace…</strong></div>;
   const isPrincipal=permissions.isPrincipal(user);
-  const isLead=data.projects.some(project=>project.leadId===user.id);
-  const nav=isPrincipal?[['home','Home',Home],['projects','Projects',FolderKanban],['people','People',Users],['reports','Reports',BarChart3]]:[['home','Home',Home],['projects','Projects',FolderKanban],['work','My Work',LayoutList],['people','People',Users],...(isLead?[['reports','Reports',BarChart3] as const]:[])];
+  const nav=isPrincipal?[['home','Home',Home],['projects','Projects',FolderKanban],['people','People',Users],['reports','Reports',BarChart3]]:[['home','Home',Home],['projects','Projects',FolderKanban],['work','My Work',LayoutList],['people','People',Users],['reports','Reports',BarChart3]];
   return <div className="app-shell">
     <aside className={`sidebar ${menuOpen?'open':''}`}>
       <div className="brand"><span className="brand-mark"><Building2 size={20}/></span><div><strong>STUDIO</strong><small>PROJECTS</small></div></div>

@@ -1,5 +1,5 @@
 const APP_URL = "https://nebulous-project--tracker.web.app";
-export const dailyReportUrl = (reportId, updateId) => `${APP_URL}/?report=${encodeURIComponent(reportId)}&update=${encodeURIComponent(updateId)}`;
+export const dailyReportUrl = (reportId, updateId) => `${APP_URL}/?report=${encodeURIComponent(reportId)}${updateId ? `&update=${encodeURIComponent(updateId)}` : ""}`;
 const ALLOWED_ORIGINS = new Set([
   APP_URL,
   "https://nebulous-project--tracker.firebaseapp.com",
@@ -450,25 +450,26 @@ async function notificationContext(env, accessToken, requestId) {
   return { helpRequest, project, item, requester };
 }
 
-async function sendDailyReportNotification(request, env, accessToken, profile, reportId) {
+export async function sendDailyReportNotification(request, env, accessToken, profile, reportId) {
   const report = await getDocument(env, accessToken, "dailyReports", reportId);
   if (!report) return jsonResponse(request, { success: false, error: "Report not found." }, 404);
-  if (profile.access !== "employee" || report.userId !== profile.userId || !Array.isArray(report.updateIds) || !report.updateIds.length) {
+  const customWork = typeof report.customWork === "string" ? report.customWork.trim() : "";
+  if (profile.access !== "employee" || report.userId !== profile.userId || !Array.isArray(report.updateIds) || (!report.updateIds.length && !customWork)) {
     return jsonResponse(request, { success: false, error: "Forbidden." }, 403);
   }
   const [update, author, recipients] = await Promise.all([
-    getDocument(env, accessToken, "dailyUpdates", report.updateIds[0]),
+    report.updateIds.length ? getDocument(env, accessToken, "dailyUpdates", report.updateIds[0]) : null,
     getDocument(env, accessToken, "users", report.userId),
     adminUserIds(env, accessToken)
   ]);
-  if (!update || update.reportId !== report.id || update.userId !== report.userId) {
+  if (report.updateIds.length && (!update || update.reportId !== report.id || update.userId !== report.userId)) {
     return jsonResponse(request, { success: false, error: "Invalid report." }, 409);
   }
-  const [item, project] = await Promise.all([
+  const [item, project] = update ? await Promise.all([
     getDocument(env, accessToken, "workItems", update.workItemId),
     getDocument(env, accessToken, "projects", update.projectId)
-  ]);
-  if (!item || !project || item.projectId !== project.id) {
+  ]) : [null, null];
+  if (update && (!item || !project || item.projectId !== project.id)) {
     return jsonResponse(request, { success: false, error: "Invalid report." }, 409);
   }
   const name = displayName(author);
@@ -477,10 +478,10 @@ async function sendDailyReportNotification(request, env, accessToken, profile, r
     title: "Studio Projects",
     body: [
       `${name} submitted a daily report`,
-      `${project.name} — ${item.name}${itemCount > 1 ? ` +${itemCount - 1} more` : ""}`,
-      shortMessage(update.text || report.summary)
+      update ? `${project.name} — ${item.name}${itemCount > 1 ? ` +${itemCount - 1} more` : ""}` : "Other work",
+      shortMessage(customWork || update?.text || report.summary)
     ].filter(Boolean).join("\n"),
-    url: dailyReportUrl(reportId, update.id),
+    url: dailyReportUrl(reportId, update?.id),
     tag: `daily-report-${reportId}`
   };
   const markerId = `${reportId}_daily_report_submitted`;

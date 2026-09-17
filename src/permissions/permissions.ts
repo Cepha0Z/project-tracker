@@ -11,6 +11,8 @@ export const permissions = {
   canDeleteProject: (user:User) => user.access==='admin',
   canGiveDirection: (user:User, project:Project) => user.access==='admin'&&project.principalId===user.id,
   canManageTeam: (user:User, project:Project) => project.leadId===user.id||user.access==='admin',
+  canEditSections: (user:User, project:Project) => permissions.canViewProject(user,project),
+  canAddDeliverable: (user:User, project:Project) => permissions.canViewProject(user,project),
   canAssignWork: (user:User, project:Project) => project.leadId===user.id||user.access==='admin',
   canManageWorkItem: (user:User, project:Project) => project.leadId===user.id||user.access==='admin',
   canUpdateOwnWork: (user:User, item:WorkItem) => (item.assigneeIds||[item.assigneeId]).includes(user.id),

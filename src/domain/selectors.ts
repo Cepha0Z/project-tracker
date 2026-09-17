@@ -3,6 +3,7 @@ import type { AppData, Project, WorkItem } from '../types';
 export type ProjectHealth = 'Need Attention' | 'Delayed' | 'On Track' | 'Completed';
 export type ProjectCardState = 'red' | 'yellow' | 'green' | 'black';
 export const PROJECT_STAGE_ORDER = ['Brief', 'Concept Design', 'Design Development', 'Documentation', 'Production', 'Procurement', 'Site Stage'] as const;
+export const projectStageNames = (project: Project) => project.stages.map(stage => stage.name);
 
 export function localDateKey(date = new Date()) {
   const year = date.getFullYear();
@@ -31,6 +32,15 @@ export function isWorkItemOverdue(item: WorkItem, date = localDateKey()) {
   return item.status !== 'Completed' && /^\d{4}-\d{2}-\d{2}$/.test(item.dueDate) && item.dueDate < date;
 }
 
+export function workItemDaysBehind(item: WorkItem, date = localDateKey()) {
+  if (!isWorkItemOverdue(item, date) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return 0;
+  const utcDay = (value: string) => {
+    const [year, month, day] = value.split('-').map(Number);
+    return Date.UTC(year, month - 1, day);
+  };
+  return Math.round((utcDay(date) - utcDay(item.dueDate)) / 86400000);
+}
+
 export function projectStageComplete(data: AppData, project: Project, stageName: string) {
   const required = projectWorkItems(data, project.id).filter(item =>
     (item.stageId || item.stage) === stageName && item.required !== false,
@@ -41,7 +51,7 @@ export function projectStageComplete(data: AppData, project: Project, stageName:
 }
 
 export function currentProjectStage(data: AppData, project: Project) {
-  return PROJECT_STAGE_ORDER.find(stage => !projectStageComplete(data, project, stage)) ?? null;
+  return projectStageNames(project).find(stage => !projectStageComplete(data, project, stage)) ?? null;
 }
 
 export function projectHealth(data: AppData, project: Project, date = localDateKey()): ProjectHealth {

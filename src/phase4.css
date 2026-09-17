@@ -178,6 +178,10 @@
 .simple-stages button.current small{color:var(--status-green-text)}
 .project-register-simple>header.project-green{border-top-color:var(--status-green-border)}
 .project-register-simple>header.project-red{border-top-color:var(--status-red-border)}
+.section-controls{display:flex;align-items:flex-start;gap:7px;margin:0 0 14px}.section-controls .later-work-indicator{margin:0}.section-edit-control{position:relative}.section-menu-trigger{display:grid;place-items:center;width:36px;height:36px;border:1px solid #d9e1d9;background:#f7faf7;color:#2b6241}.section-menu{position:absolute;z-index:4;top:39px;left:0;min-width:190px;padding:5px;background:#fff;border:1px solid var(--line);box-shadow:0 8px 22px rgba(20,32,24,.12)}.section-menu button{display:block;width:100%;padding:9px;border:0;background:#fff;color:#263a2e;text-align:left;font-size:12px;font-weight:600}.section-menu button:hover{background:#edf4ef}.section-menu button:disabled{opacity:.45}.section-edit-modal p:not(.modal-kicker):not(.simple-error){font-size:13px;line-height:1.5;color:#46584c}.section-edit-modal .project-delete-action{margin-top:16px}.section-edit-modal .project-delete-action:disabled{opacity:.45}
+.overview-projects .overview-work-due .days-behind,.due-block.overdue em{color:#98501d;font-weight:700}.overview-work-due .days-behind{margin-left:0}
+.report-custom{padding:12px 0 18px;border-bottom:1px solid var(--line)}.report-custom label{display:block;color:#2f3d33;font-size:13px;font-weight:700}.report-custom textarea{display:block;width:100%;min-height:72px;margin-top:8px;padding:10px;border:1px solid var(--line);resize:vertical}.report-tracker-heading{margin:18px 0 4px;font-size:13px;font-weight:750;color:#34483b}.daily-feed .feed-copy p{white-space:pre-wrap;overflow-wrap:anywhere}
+.section-move{display:flex;align-items:end;gap:9px;margin-top:14px;padding-top:13px;border-top:1px solid var(--line)}.section-move label{flex:1;font-size:12px;font-weight:700;color:#34483b}.section-move select{display:block;width:100%;margin-top:6px;padding:9px;border:1px solid var(--line);background:#fff}.section-move button{min-height:39px;padding:8px 13px;border:1px solid var(--line);background:#f7faf7;color:#205b39;font-weight:700}.section-move button:disabled{opacity:.45}.archived-work-open{width:100%;text-align:left;cursor:pointer}.archived-work-open:hover{background:#f4f7f5}
 @media(max-width:1000px){
   .overview-projects .overview-work-row{grid-template-columns:minmax(0,1fr) minmax(92px,30%) 18px;gap:8px 12px}
   .overview-work-name{grid-column:1;grid-row:1}
@@ -193,4 +197,5 @@
   .overview-projects .overview-work-meter b{font-size:12px;min-width:30px}
   .employee-home-section h2{font-size:17px}
   .work-card-title strong{font-size:19px}
+  .section-menu{left:auto;right:0}
 }

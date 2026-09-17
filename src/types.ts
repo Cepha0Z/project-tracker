@@ -158,6 +158,7 @@ export interface DailyReport {
   userId: string;
   date: string;
   summary: string;
+  customWork?: string;
   createdAt: string;
   updateIds: string[];
   items?: {workItemId:string;previousProgress:number;newProgress:number;progressDelta:number;status:WorkStatus}[];

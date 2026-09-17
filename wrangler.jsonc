@@ -2,6 +2,7 @@
   "name": "morning-night-85ab",
   "main": "cf-test-worker.js",
   "compatibility_date": "2026-09-15",
+  "triggers": { "crons": ["30 13 * * *"] },
   "preview_urls": true,
   "observability": {
     "enabled": true,

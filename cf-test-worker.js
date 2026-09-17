@@ -277,6 +277,71 @@ export async function adminUserIds(env, accessToken) {
   return validated.filter(Boolean);
 }
 
+export function indiaDateKey(instant) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit"
+  }).formatToParts(new Date(instant));
+  const part = type => parts.find(entry => entry.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+export async function employeeUserIds(env, accessToken) {
+  const candidates = await queryDocuments(env, accessToken, "authProfiles", "access", "employee");
+  const validated = await Promise.all(candidates.map(async profile => {
+    if (profile.active !== true || !profile.userId) return null;
+    const user = await getDocument(env, accessToken, "users", profile.userId);
+    return user?.authUid === profile.id && user?.access === "employee" && user?.active !== false && user?.loginEnabled !== false ? user.id : null;
+  }));
+  return [...new Set(validated.filter(Boolean))];
+}
+
+// Invoked only by the Wrangler cron (13:30 UTC = 19:00 India Standard Time).
+// The scheduled timestamp, rather than the execution time, fixes the business date on retries.
+export async function sendMissingReportReminders(env, accessToken, scheduledTime) {
+  const date = indiaDateKey(scheduledTime);
+  const [employees, reports] = await Promise.all([
+    employeeUserIds(env, accessToken),
+    queryDocuments(env, accessToken, "dailyReports", "date", date)
+  ]);
+  const submitted = new Set(reports.map(report => report.userId));
+  const pending = employees.filter(userId => !submitted.has(userId));
+  const outcomes = await Promise.allSettled(pending.map(async userId => {
+    const markerId = `missing_report_${date}_${userId}`;
+    const created = await createDeliveryMarker(env, accessToken, markerId, {
+      event: stringField("missing_report_reminder"),
+      actorId: stringField(userId),
+      date: stringField(date),
+      status: stringField("sending"),
+      createdAt: timestampField()
+    });
+    if (!created) return "duplicate";
+    try {
+      const result = await sendToUsers(env, accessToken, [userId], {
+        title: "Studio Projects", body: "Please submit today's report.",
+        url: APP_URL, tag: `missing-report-${date}`
+      });
+      const status = result.failed ? "partial" : result.attempted ? "sent" : "no_devices";
+      await updateDocumentFields(env, accessToken, "notificationDeliveries", markerId, {
+        status: stringField(status), attempted: integerField(result.attempted),
+        delivered: integerField(result.delivered), failed: integerField(result.failed),
+        completedAt: timestampField()
+      });
+      return status;
+    } catch (error) {
+      await updateDocumentFields(env, accessToken, "notificationDeliveries", markerId, {
+        status: stringField("failed"), completedAt: timestampField()
+      }).catch(() => undefined);
+      throw error;
+    }
+  }));
+  const statuses = outcomes.map(outcome => outcome.status === "fulfilled" ? outcome.value : "failed");
+  return { date, eligible: employees.length, submitted: employees.length - pending.length,
+    pending: pending.length, sent: statuses.filter(status => status === "sent").length,
+    noDevices: statuses.filter(status => status === "no_devices").length,
+    duplicates: statuses.filter(status => status === "duplicate").length,
+    failed: statuses.filter(status => status === "failed" || status === "partial").length };
+}
+
 function displayName(user) {
   const local = typeof user?.email === "string" ? user.email.split("@")[0] : "";
   const first = (local || user?.name || "Team member").replace(/[._-]+/g, " ").trim().split(/\s+/)[0];
@@ -562,6 +627,11 @@ async function sendHelpNotification(request, env) {
 }
 
 export default {
+  async scheduled(controller, env) {
+    const accessToken = await createGoogleAccessToken(env);
+    const result = await sendMissingReportReminders(env, accessToken, controller.scheduledTime);
+    console.log("Daily report reminder summary", result);
+  },
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/notifications/help") return sendHelpNotification(request, env);

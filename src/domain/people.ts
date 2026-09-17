@@ -5,7 +5,12 @@ const originalDisplayNames=new Map<string,string>();
 export function displayNameFromEmail(person:Pick<User,'email'|'name'>) {
   const localPart=person.email?.split('@')[0]?.trim();
   const first=(localPart||person.name.split(/\s+/)[0]||'User').replace(/[._-]+/g,' ').split(/\s+/)[0];
+  if(person.name.trim()&&!/\s/.test(person.name.trim())&&person.name.toLowerCase()===first.toLowerCase())return person.name.trim();
   return first.charAt(0).toUpperCase()+first.slice(1).toLowerCase();
+}
+
+export function jobRole(person:User) {
+  return person.access==='admin'?'Principal Architect':person.title;
 }
 
 export function presentUser(person:User):User {

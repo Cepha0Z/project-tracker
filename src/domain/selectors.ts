@@ -1,7 +1,8 @@
 import type { AppData, Project, WorkItem } from '../types';
 
-export type ProjectHealth = 'Needs Attention' | 'Blocked' | 'Delayed' | 'On Track' | 'Completed';
-export type ProjectCardState = 'red' | 'yellow' | 'normal';
+export type ProjectHealth = 'Need Attention' | 'Delayed' | 'On Track' | 'Completed';
+export type ProjectCardState = 'red' | 'yellow' | 'green' | 'black';
+export const PROJECT_STAGE_ORDER = ['Brief', 'Concept Design', 'Design Development', 'Documentation', 'Production', 'Procurement', 'Site Stage'] as const;
 
 export function localDateKey(date = new Date()) {
   const year = date.getFullYear();
@@ -30,18 +31,27 @@ export function isWorkItemOverdue(item: WorkItem, date = localDateKey()) {
   return item.status !== 'Completed' && /^\d{4}-\d{2}-\d{2}$/.test(item.dueDate) && item.dueDate < date;
 }
 
+export function projectStageComplete(data: AppData, project: Project, stageName: string) {
+  const required = projectWorkItems(data, project.id).filter(item =>
+    (item.stageId || item.stage) === stageName && item.required !== false,
+  );
+  // A stage with no required work can only be complete if it was explicitly closed.
+  return required.length ? required.every(item => item.status === 'Completed')
+    : project.stages.some(stage => stage.name === stageName && stage.state === 'done');
+}
+
+export function currentProjectStage(data: AppData, project: Project) {
+  return PROJECT_STAGE_ORDER.find(stage => !projectStageComplete(data, project, stage)) ?? null;
+}
+
 export function projectHealth(data: AppData, project: Project, date = localDateKey()): ProjectHealth {
   const required = projectWorkItems(data, project.id).filter(item => item.required !== false);
   const unresolvedHelp = data.helpRequests.some(request =>
     request.projectId === project.id && request.status !== 'Resolved',
   );
-  const unresolvedBlocker = data.helpRequests.some(request =>
-    request.projectId === project.id && request.kind === 'blocked' && request.status !== 'Resolved',
-  );
-  if (unresolvedBlocker || required.some(item => item.status === 'Blocked')) return 'Blocked';
-  if (unresolvedHelp) return 'Needs Attention';
-  if (required.length > 0 && required.every(item => item.status === 'Completed')) return 'Completed';
+  if (unresolvedHelp || required.some(item => item.status === 'Blocked')) return 'Need Attention';
   if (required.some(item => isWorkItemOverdue(item, date))) return 'Delayed';
+  if (currentProjectStage(data, project) === null) return 'Completed';
   return 'On Track';
 }
 
@@ -55,12 +65,10 @@ export function projectAttention(data: AppData, project: Project, date = localDa
   return { overdue, blocked, escalations };
 }
 
-export function projectCardState(data: AppData, project: Project): ProjectCardState {
-  if (data.helpRequests.some(request => request.projectId === project.id && request.status !== 'Resolved')
-    || projectHealth(data, project) === 'Blocked') return 'red';
-  const all = data.workItems.filter(item => item.projectId === project.id);
-  if (all.length > 0 && all.every(item => item.archived)) return 'yellow';
-  return 'normal';
+export function projectCardState(data: AppData, project: Project, date = localDateKey()): ProjectCardState {
+  const health = projectHealth(data, project, date);
+  return health === 'Need Attention' ? 'red' : health === 'Delayed' ? 'yellow'
+    : health === 'Completed' ? 'black' : 'green';
 }
 
-export const projectCardOrder: Record<ProjectCardState, number> = { red: 0, yellow: 1, normal: 2 };
+export const projectCardOrder: Record<ProjectCardState, number> = { red: 0, yellow: 1, green: 2, black: 3 };

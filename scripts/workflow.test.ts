@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { seedData } from '../src/data/seed';
 import { connectedPeople, displayActivityText, displayNameFromEmail, jobRole, presentUser } from '../src/domain/people';
-import { currentProjectStage, employeeActiveWork, projectCardOrder, projectCardState, projectHealth } from '../src/domain/selectors';
+import { PROJECT_STAGE_ORDER, currentProjectStage, employeeActiveWork, projectCardOrder, projectCardState, projectHealth } from '../src/domain/selectors';
 import { notificationChanges } from '../src/services/notificationEvents';
 import { helpRequestService } from '../src/services/helpRequestService';
 import { MAX_PROJECT_DELETION_OPERATIONS, projectDeletionImpact, projectService } from '../src/services/projectService';
@@ -87,6 +87,16 @@ assert.equal(projectService.removeTeamMember(finished,'sudiksha','villa-60','rah
 
 const created=projectService.create(base,'manoj',{name:'Another Residence',leadId:'sudiksha',principalId:'manoj',teamIds:['rahul']});
 assert.deepEqual(created.projects.at(-1)?.teamIds,['rahul','sudiksha','manoj']);
+const newProject=created.projects.at(-1)!;
+assert.deepEqual(newProject.stages.map(section=>section.name),PROJECT_STAGE_ORDER,'new projects persist all seven sections in order');
+assert.deepEqual(newProject.stages.map(section=>section.state),['current','next','next','next','next','next','next']);
+assert.equal(currentProjectStage(created,newProject),'Brief');
+const newProjectHtml=renderToStaticMarkup(createElement(SimpleProject,{data:created,user:base.users.find(person=>person.id==='manoj')!,projectId:newProject.id,back:()=>{},mutate:()=>{}}));
+assert.ok(newProjectHtml.includes('aria-expanded="false">Later sections'),'new projects can reveal future sections before later work exists');
+assert.ok(newProjectHtml.includes('● CURRENT')&&!newProjectHtml.includes('>Procurement<'),'the current section remains Brief until completed');
+const futureWork=workItemService.create(created,'sudiksha',{projectId:newProject.id,name:'Production drawing',assigneeId:'rahul',stage:'Production',dueDate:'2026-10-01',notes:''});
+assert.equal(futureWork.workItems.at(-1)?.stageId,'Production','new deliverables retain the chosen section');
+assert.equal(currentProjectStage(futureWork,newProject),'Brief','future deliverables do not advance the current section');
 assert.equal(projectService.create(base,'manoj',{name:'Invalid',leadId:'sudiksha',principalId:'manoj',teamIds:['siddharth']}),base);
 
 const normal=helpRequestService.create(base,'rahul',{workItemId:'assigned-work',reason:'Confirm island dimensions'});

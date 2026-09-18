@@ -1,9 +1,9 @@
-import type { AppData } from '../types';
+import type { AppData, User } from '../types';
 import { firebaseRepository } from './firebaseRepository';
 
 export interface AppRepository {
   load(): AppData;
-  subscribe(onData:(data:AppData)=>void,onError:(error:Error)=>void):()=>void;
+  subscribe(user:User,onData:(data:AppData)=>void,onError:(error:Error)=>void):()=>void;
   save(data: AppData, previous:AppData): Promise<void>;
   importLocal(currentCloud:AppData):Promise<void>;
 }

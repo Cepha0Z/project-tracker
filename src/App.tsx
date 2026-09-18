@@ -21,8 +21,9 @@ import { NotificationControl } from './components/NotificationControl';
 import { notificationService, type ForegroundNotification } from './services/notificationService';
 import { helpNotificationService } from './services/helpNotificationService';
 import { displayActivityText, jobRole } from './domain/people';
+import { MeetingsPage } from './components/MeetingsPage';
 
-type Page='home'|'projects'|'project'|'work'|'people'|'reports'|'notifications';
+type Page='home'|'projects'|'project'|'work'|'people'|'meetings'|'reports'|'notifications';
 type Mutate=(fn:(data:AppData)=>AppData)=>void;
 const today=localDateKey;
 const assigneeIds=workItemAssigneeIds;
@@ -47,7 +48,7 @@ export default function App(){
   const [targetUpdateId,setTargetUpdateId]=useState<string|undefined>(()=>initialTarget.get('update')||undefined);
   const [foregroundNotification,setForegroundNotification]=useState<ForegroundNotification|null>(null);
   const [menuOpen,setMenuOpen]=useState(false);
-  useEffect(()=>{let stopData:()=>void=()=>undefined;const stopAuth=authService.subscribe(profile=>{stopData();setSessionUser(profile);setAuthReady(true);setSyncError('');if(profile){setDataReady(false);stopData=repository.subscribe(next=>{setData(next);setDataReady(true)},error=>{setSyncError(error.message);setDataReady(true)})}else setDataReady(false)},message=>{setSyncError(message);setAuthReady(true)});return()=>{stopData();stopAuth()}},[]);
+  useEffect(()=>{let stopData:()=>void=()=>undefined;const stopAuth=authService.subscribe(profile=>{stopData();setSessionUser(profile);setAuthReady(true);setSyncError('');if(profile){setDataReady(false);stopData=repository.subscribe(profile,next=>{setData(next);setDataReady(true)},error=>{setSyncError(error.message);setDataReady(true)})}else setDataReady(false)},message=>{setSyncError(message);setAuthReady(true)});return()=>{stopData();stopAuth()}},[]);
   useEffect(()=>{let stop:()=>void=()=>undefined;notificationService.subscribeForeground(setForegroundNotification).then(unsubscribe=>{stop=unsubscribe});return()=>stop()},[]);
   const storedUser=data.users.find(u=>u.id===sessionUser?.id);
   const user=sessionUser?{...(storedUser||sessionUser),access:sessionUser.access}:null;
@@ -62,7 +63,7 @@ export default function App(){
   if(!user)return <Login externalError={syncError}/>;
   if(!dataReady)return <div className="firebase-loading"><span/><strong>Loading your workspace…</strong></div>;
   const isPrincipal=permissions.isPrincipal(user);
-  const nav=isPrincipal?[['home','Home',Home],['projects','Projects',FolderKanban],['people','People',Users],['reports','Reports',BarChart3]]:[['home','Home',Home],['projects','Projects',FolderKanban],['work','My Work',LayoutList],['people','People',Users],['reports','Reports',BarChart3]];
+  const nav=isPrincipal?[['home','Home',Home],['projects','Projects',FolderKanban],['people','People',Users],['meetings','Meetings',CalendarDays],['reports','Reports',BarChart3]]:[['home','Home',Home],['projects','Projects',FolderKanban],['work','My Work',LayoutList],['people','People',Users],['meetings','Meetings',CalendarDays],['reports','Reports',BarChart3]];
   return <div className="app-shell">
     <aside className={`sidebar ${menuOpen?'open':''}`}>
       <div className="brand"><span className="brand-mark"><Building2 size={20}/></span><div><strong>STUDIO</strong><small>PROJECTS</small></div></div>
@@ -81,6 +82,7 @@ export default function App(){
         {page==='project'&&(data.projects.some(project=>project.id===projectId)?<ProjectWorkspace data={data} user={user} projectId={projectId} initialWorkItemId={targetWorkItemId} initialHelpId={targetHelpId} openDetailOnEntry={openDetailOnEntry} back={()=>navigate('projects')} mutate={mutate}/>:<div className="page simple-page"><button className="secondary" onClick={()=>navigate('projects')}>Back to Projects</button><Empty>Project no longer exists.</Empty></div>)}
         {page==='work'&&<EmployeeWorkspace data={data} user={user} openWorkItem={openOverviewItem} mutate={mutate} showAll/>}
         {page==='people'&&<SimplePeople data={data} user={user} mutate={mutate}/>} 
+        {page==='meetings'&&<MeetingsPage data={data} user={user} mutate={mutate}/>}
         {page==='reports'&&<SimpleReports data={data} user={user} focusReportId={targetReportId} focusUpdateId={targetUpdateId}/>}
         {page==='notifications'&&<NotificationCenter data={data} user={user} openHelp={openWorkItem} openReport={openReport}/>}</>
       </main>

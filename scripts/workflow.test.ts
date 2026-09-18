@@ -9,8 +9,10 @@ import { helpRequestService } from '../src/services/helpRequestService';
 import { MAX_PROJECT_DELETION_OPERATIONS, projectDeletionImpact, projectService } from '../src/services/projectService';
 import { workItemService } from '../src/services/workItemService';
 import { updateService } from '../src/services/updateService';
+import { meetingService } from '../src/services/meetingService';
 import { permissions } from '../src/permissions/permissions';
 import { EmployeeWorkspace, OverviewProjectGroups, ReportModal, SimplePeople, SimpleProject, SimpleReports } from '../src/components/phase4';
+import { MeetingsPage } from '../src/components/MeetingsPage';
 import type { AppData, WorkItem } from '../src/types';
 
 function fixture():AppData {
@@ -27,6 +29,23 @@ function fixture():AppData {
 }
 
 const base=fixture();
+const generalMeeting=meetingService.create(base,'rahul',{date:'2026-09-18',title:' Studio coordination ',projectId:null,attendeeIds:['rahul','sudiksha','rahul'],notes:'Discussed staffing.'});
+assert.equal(generalMeeting.meetings?.[0].title,'Studio coordination');
+assert.deepEqual(generalMeeting.meetings?.[0].attendeeIds,['rahul','sudiksha']);
+const projectMeeting=meetingService.create(generalMeeting,'rahul',{date:'2026-09-17',title:'Kitchen review',projectId:'villa-60',attendeeIds:['rahul'],notes:'Agreed revised layout.'});
+assert.equal(projectMeeting.meetings?.length,2);
+assert.equal(meetingService.create(base,'siddharth',{date:'2026-09-18',title:'Not a project member',projectId:'villa-60',attendeeIds:[],notes:''}),base);
+assert.equal(meetingService.create(base,'rahul',{date:'2026-09-18',title:'Unlinked attendee',projectId:null,attendeeIds:['siddharth'],notes:''}),base);
+assert.equal(meetingService.create(base,'rahul',{date:'2026-09-18',title:'  ',projectId:null,attendeeIds:[],notes:''}),base);
+assert.equal(meetingService.create(base,'rahul',{date:'2026-02-31',title:'Invalid date',projectId:null,attendeeIds:[],notes:''}),base);
+const outsider=base.users.find(person=>person.id==='siddharth')!;
+assert.deepEqual(meetingService.visible(projectMeeting,outsider.id).map(meeting=>meeting.title),['Studio coordination'],'general meetings are studio-wide, but project meetings require access');
+assert.deepEqual(meetingService.visible(projectMeeting,'rahul').map(meeting=>meeting.title),['Studio coordination','Kitchen review']);
+assert.equal(meetingService.visible(projectMeeting,'manoj').length,2,'admins see all meetings');
+const meetingListHtml=renderToStaticMarkup(createElement(MeetingsPage,{data:projectMeeting,user:base.users.find(person=>person.id==='rahul')!,mutate:()=>{}}));
+assert.ok(meetingListHtml.includes('New Meeting')&&meetingListHtml.includes('Kitchen review')&&meetingListHtml.includes('General / No Project')&&meetingListHtml.includes('Sudiksha'));
+const outsiderMeetingsHtml=renderToStaticMarkup(createElement(MeetingsPage,{data:projectMeeting,user:outsider,mutate:()=>{}}));
+assert.ok(!outsiderMeetingsHtml.includes('Kitchen review'));
 assert.deepEqual(connectedPeople(base).map(user=>user.id),['kiran','manoj','sudiksha','rahul']);
 assert.equal(displayNameFromEmail({email:'kiran@nebulous.com',name:'Wrong Surname'}),'Kiran');
 assert.equal(displayNameFromEmail({email:'cephajj@nebulousdesign.com',name:'CephaJJ'}),'CephaJJ');
@@ -234,6 +253,8 @@ const deletionBase=fixture();
 const otherProject={...deletionBase.projects[0],id:'other-project',name:'Other Project'};
 const otherItem={...deletionBase.workItems[0],id:'other-work',projectId:'other-project'};
 const deletionData:AppData={...deletionBase,
+  meetings:[{id:'meeting-v',date:'2026-09-18',title:'Villa review',projectId:'villa-60',attendeeIds:['rahul'],notes:'Details',createdBy:'rahul',createdAt:'2026-09-18T09:00:00Z'},
+    {id:'meeting-o',date:'2026-09-18',title:'Other review',projectId:'other-project',attendeeIds:['rahul'],notes:'Details',createdBy:'rahul',createdAt:'2026-09-18T09:00:00Z'}],
   projects:[...deletionBase.projects,otherProject],workItems:[...deletionBase.workItems,otherItem],
   updates:[
     {id:'update-v',projectId:'villa-60',workItemId:'assigned-work',userId:'rahul',text:'Villa',progress:40,minutes:0,status:'In Progress',createdAt:'2026-09-16T09:00:00Z'},
@@ -258,8 +279,10 @@ assert.equal(projectService.deleteProject(deletionData,'sudiksha','villa-60'),de
 assert.equal(projectService.deleteProject(deletionData,'rahul','other-project'),deletionData,'an employee cannot delete a project');
 assert.equal(projectDeletionImpact(deletionData,'villa-60').reportsUpdated,1);
 assert.equal(projectDeletionImpact(deletionData,'villa-60').reportsDeleted,1);
+assert.equal(projectDeletionImpact(deletionData,'villa-60').meetings,1);
 const removed=projectService.deleteProject(deletionData,'manoj','villa-60');
 assert.deepEqual(removed.projects.map(project=>project.id),['other-project']);
+assert.deepEqual(removed.meetings?.map(meeting=>meeting.id),['meeting-o'],'project deletion accounts for its meeting records');
 for(const group of ['workItems','updates','helpRequests','activities','cycles','timeEntries'] as const)
   assert.ok(removed[group].every(entity=>entity.projectId!=='villa-60'),`${group} has no orphaned project records`);
 assert.deepEqual(removed.dailyReports?.map(report=>report.id),['report-mixed']);

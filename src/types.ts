@@ -164,6 +164,17 @@ export interface DailyReport {
   items?: {workItemId:string;previousProgress:number;newProgress:number;progressDelta:number;status:WorkStatus}[];
 }
 
+export interface Meeting {
+  id: string;
+  date: string;
+  title: string;
+  projectId: string | null;
+  attendeeIds: string[];
+  notes: string;
+  createdBy: string;
+  createdAt: string;
+}
+
 export interface TimeEntry {
   id: string;
   projectId: string;
@@ -185,5 +196,6 @@ export interface AppData {
   cycles: Cycle[];
   timeEntries: TimeEntry[];
   dailyReports?: DailyReport[];
+  meetings?: Meeting[];
   schemaVersion?: number;
 }

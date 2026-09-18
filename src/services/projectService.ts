@@ -29,8 +29,9 @@ export function projectDeletionImpact(data:AppData,projectId:string){
   const activities=data.activities.filter(activity=>activity.projectId===projectId).length;
   const cycles=data.cycles.filter(cycle=>cycle.projectId===projectId).length;
   const timeEntries=data.timeEntries.filter(entry=>entry.projectId===projectId).length;
-  return {workItems,updates,helpRequests,activities,cycles,timeEntries,reportsDeleted:reports.deleted,reportsUpdated:reports.updated,
-    operations:1+workItems+updates+helpRequests+activities+cycles+timeEntries+reports.deleted+reports.updated};
+  const meetings=(data.meetings||[]).filter(meeting=>meeting.projectId===projectId).length;
+  return {workItems,updates,helpRequests,activities,cycles,timeEntries,meetings,reportsDeleted:reports.deleted,reportsUpdated:reports.updated,
+    operations:1+workItems+updates+helpRequests+activities+cycles+timeEntries+meetings+reports.deleted+reports.updated};
 }
 
 export const projectService = {
@@ -47,6 +48,7 @@ export const projectService = {
       activities:data.activities.filter(activity=>activity.projectId!==projectId),
       cycles:data.cycles.filter(cycle=>cycle.projectId!==projectId),
       timeEntries:data.timeEntries.filter(entry=>entry.projectId!==projectId),
+      meetings:(data.meetings||[]).filter(meeting=>meeting.projectId!==projectId),
       dailyReports:reportsAfterProjectRemoval(data,projectId).reports,
     };
   },

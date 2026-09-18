@@ -20,6 +20,7 @@ export const localStore = {
 function migrate(input: Partial<AppData>): AppData {
   const data = {...structuredClone(seedData), ...input} as AppData;
   data.dailyReports ||= [];
+  data.meetings ||= [];
   data.cycles ||= [];
   data.timeEntries ||= [];
   for (const project of data.projects) {

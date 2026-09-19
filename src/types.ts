@@ -12,7 +12,7 @@ export interface User {
   access: AccessRole;
   tone: string;
   reportsToId?: string;
-  loginEnabled?: boolean;
+  loginEnabled?: boolean | 'true' | 'false';
   email?: string;
   authUid?: string;
   active?: boolean;

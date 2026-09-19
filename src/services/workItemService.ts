@@ -2,6 +2,7 @@ import type { AppData, WorkItem, WorkStatus } from '../types';
 import { makeId, withActivity } from './shared';
 import { permissions } from '../permissions/permissions';
 import { workItemAssigneeIds } from '../domain/selectors';
+import { isConnectedPerson } from '../domain/people';
 
 type WorkInput=Pick<WorkItem,'projectId'|'name'|'assigneeId'|'stage'|'dueDate'|'notes'> & {cycleId?:string;assigneeIds?:string[];scopeNotes?:string;subItems?:WorkItem['subItems'];required?:boolean};
 const dueLabel=(date:string)=>new Date(`${date}T00:00:00`).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
@@ -14,7 +15,7 @@ const transition=(item:WorkItem,status:WorkStatus,progress:number,stamp:string):
   return {status,progress,startedAt,completedAt,activeElapsedMinutes,blockedReason:status==='Blocked'?item.blockedReason:undefined,updatedAt:stamp};
 };
 export const workItemService = {
-  create(data:AppData, actorId:string, input:WorkInput):AppData { const project=data.projects.find(p=>p.id===input.projectId),actor=data.users.find(u=>u.id===actorId),assignees=input.assigneeIds?.length?input.assigneeIds:[input.assigneeId]; if(!project||!actor||!permissions.canAddDeliverable(actor,project)||!project.stages.some(stage=>stage.name===input.stage)||!assignees.length||assignees.some(id=>!project.teamIds.includes(id)||!data.users.some(person=>person.id===id&&person.authUid&&person.active!==false))) return data; const stamp=new Date().toISOString(); const item:WorkItem={...input,id:makeId('deliverable'),assigneeId:assignees[0],assigneeIds:assignees,stageId:input.stage,scopeNotes:input.scopeNotes||input.notes||'',subItems:input.subItems||[],required:input.required??true,createdBy:actorId,createdAt:stamp,updatedAt:stamp,dueLabel:dueLabel(input.dueDate),status:'Not Started',progress:0,hours:0,activeElapsedMinutes:0,archived:false}; const next={...data,workItems:[...data.workItems,item],cycles:data.cycles.map(c=>c.id===input.cycleId?{...c,deliverableIds:[...(c.deliverableIds||[]),item.id]}:c)}; return withActivity(next,input.projectId,actorId,`created deliverable ${item.name}`); },
+  create(data:AppData, actorId:string, input:WorkInput):AppData { const project=data.projects.find(p=>p.id===input.projectId),actor=data.users.find(u=>u.id===actorId),assignees=input.assigneeIds?.length?input.assigneeIds:[input.assigneeId]; if(!project||!actor||!permissions.canAddDeliverable(actor,project)||!project.stages.some(stage=>stage.name===input.stage)||!assignees.length||assignees.some(id=>!project.teamIds.includes(id)||!data.users.some(person=>person.id===id&&isConnectedPerson(person)))) return data; const stamp=new Date().toISOString(); const item:WorkItem={...input,id:makeId('deliverable'),assigneeId:assignees[0],assigneeIds:assignees,stageId:input.stage,scopeNotes:input.scopeNotes||input.notes||'',subItems:input.subItems||[],required:input.required??true,createdBy:actorId,createdAt:stamp,updatedAt:stamp,dueLabel:dueLabel(input.dueDate),status:'Not Started',progress:0,hours:0,activeElapsedMinutes:0,archived:false}; const next={...data,workItems:[...data.workItems,item],cycles:data.cycles.map(c=>c.id===input.cycleId?{...c,deliverableIds:[...(c.deliverableIds||[]),item.id]}:c)}; return withActivity(next,input.projectId,actorId,`created deliverable ${item.name}`); },
   moveToSection(data:AppData, actorId:string, itemId:string, section:string):AppData {
     const item=data.workItems.find(work=>work.id===itemId),project=data.projects.find(candidate=>candidate.id===item?.projectId),actor=data.users.find(person=>person.id===actorId);
     if(!item||!project||!actor||!permissions.canEditSections(actor,project)||!project.stages.some(stage=>stage.name===section)||(item.stageId||item.stage)===section)return data;
@@ -27,7 +28,7 @@ export const workItemService = {
     const managing=permissions.canManageWorkItem(actor,project);
     const employeeKeys:(keyof WorkItem)[]=['name','dueDate','scopeNotes','notes','status','progress','blockedReason'];
     const allowed=managing?{...changes}:Object.fromEntries(employeeKeys.filter(key=>changes[key]!==undefined).map(key=>[key,changes[key]])) as Partial<WorkItem>;
-    if(allowed.assigneeIds?.some(id=>!project.teamIds.includes(id)||!data.users.some(person=>person.id===id&&person.authUid&&person.active!==false)))return data;
+    if(allowed.assigneeIds?.some(id=>!project.teamIds.includes(id)||!data.users.some(person=>person.id===id&&isConnectedPerson(person))))return data;
     const stamp=new Date().toISOString(),status=allowed.progress===100?'Completed':allowed.status||(item.status==='Not Started'&&(allowed.progress||0)>0?'In Progress':item.status),progress=status==='Completed'?100:allowed.progress??(item.status==='Completed'&&status==='In Progress'?item.previousProgress??75:item.progress);
     const timing=transition(item,status,progress,stamp);
     const normalized={...allowed,...timing,...(allowed.stage?{stageId:allowed.stage}:{}),...(allowed.assigneeIds?.length?{assigneeId:allowed.assigneeIds[0]}:{}),...(allowed.dueDate?{dueLabel:dueLabel(allowed.dueDate)}:{})};
@@ -48,11 +49,11 @@ export const workItemService = {
     if(item.status==='Completed'&&status==='In Progress')next=withActivity(next,item.projectId,actorId,`reopened ${item.name}`,stamp);
     return withActivity(next,item.projectId,actorId,`changed ${item.name} progress from ${item.progress}% to ${value}%`,stamp);
   },
-  assign(data:AppData, actorId:string, itemId:string, assigneeIds:string[]):AppData { const item=data.workItems.find(w=>w.id===itemId)!,project=data.projects.find(p=>p.id===item.projectId)!,actor=data.users.find(u=>u.id===actorId); if(!actor||!permissions.canAssignWork(actor,project)||!assigneeIds.length||assigneeIds.some(id=>!project.teamIds.includes(id)||!data.users.some(person=>person.id===id&&person.authUid&&person.active!==false))) return data; const names=assigneeIds.map(id=>data.users.find(u=>u.id===id)?.name).join(', '); return withActivity({...data,workItems:data.workItems.map(w=>w.id===itemId?{...w,assigneeId:assigneeIds[0],assigneeIds,updatedAt:new Date().toISOString()}:w)},item.projectId,actorId,`assigned ${item.name} to ${names}`); },
+  assign(data:AppData, actorId:string, itemId:string, assigneeIds:string[]):AppData { const item=data.workItems.find(w=>w.id===itemId)!,project=data.projects.find(p=>p.id===item.projectId)!,actor=data.users.find(u=>u.id===actorId); if(!actor||!permissions.canAssignWork(actor,project)||!assigneeIds.length||assigneeIds.some(id=>!project.teamIds.includes(id)||!data.users.some(person=>person.id===id&&isConnectedPerson(person)))) return data; const names=assigneeIds.map(id=>data.users.find(u=>u.id===id)?.name).join(', '); return withActivity({...data,workItems:data.workItems.map(w=>w.id===itemId?{...w,assigneeId:assigneeIds[0],assigneeIds,updatedAt:new Date().toISOString()}:w)},item.projectId,actorId,`assigned ${item.name} to ${names}`); },
   claim(data:AppData, actorId:string, itemId:string):AppData {
     const item=data.workItems.find(work=>work.id===itemId),actor=data.users.find(person=>person.id===actorId);
     const project=data.projects.find(candidate=>candidate.id===item?.projectId);
-    if(!item||!actor||!project||actor.access!=='employee'||!actor.authUid||item.archived||item.status==='Completed'||!permissions.canViewProject(actor,project)||!project.teamIds.includes(actorId))return data;
+    if(!item||!actor||!project||actor.access!=='employee'||!isConnectedPerson(actor)||item.archived||item.status==='Completed'||!permissions.canViewProject(actor,project)||!project.teamIds.includes(actorId))return data;
     const assigneeIds=workItemAssigneeIds(item);
     if(assigneeIds.includes(actorId))return data;
     const next={...data,workItems:data.workItems.map(work=>work.id===itemId?{...work,assigneeIds:[...assigneeIds,actorId],updatedAt:new Date().toISOString()}:work)};

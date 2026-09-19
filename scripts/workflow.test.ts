@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { seedData } from '../src/data/seed';
-import { connectedPeople, displayActivityText, displayNameFromEmail, jobRole, presentUser } from '../src/domain/people';
+import { connectedPeople, displayActivityText, displayNameFromEmail, enabledAccountFlag, jobRole, presentUser } from '../src/domain/people';
 import { PROJECT_STAGE_ORDER, currentProjectStage, employeeActiveWork, projectCardOrder, projectCardState, projectHealth, workItemDaysBehind } from '../src/domain/selectors';
 import { notificationChanges } from '../src/services/notificationEvents';
 import { helpRequestService } from '../src/services/helpRequestService';
@@ -11,7 +11,7 @@ import { workItemService } from '../src/services/workItemService';
 import { updateService } from '../src/services/updateService';
 import { meetingService } from '../src/services/meetingService';
 import { permissions } from '../src/permissions/permissions';
-import { EmployeeWorkspace, OverviewProjectGroups, ReportModal, SimplePeople, SimpleProject, SimpleReports } from '../src/components/phase4';
+import { EmployeeWorkspace, NewProject, OverviewProjectGroups, ReportModal, SimplePeople, SimpleProject, SimpleReports } from '../src/components/phase4';
 import { MeetingsPage } from '../src/components/MeetingsPage';
 import type { AppData, WorkItem } from '../src/types';
 
@@ -29,6 +29,26 @@ function fixture():AppData {
 }
 
 const base=fixture();
+assert.equal(enabledAccountFlag(true),true);
+assert.equal(enabledAccountFlag('true'),true);
+assert.equal(enabledAccountFlag(false),false);
+assert.equal(enabledAccountFlag('false'),false);
+assert.equal(presentUser({id:'normalized',name:'Normalized',initials:'N',title:'Architect',access:'employee',tone:'#000',loginEnabled:'true'}).loginEnabled,true);
+const jeevan={id:'jeevan',name:'Jeevan',initials:'J',title:'Architect',access:'employee' as const,tone:'#53675c',authUid:'firebase-jeevan',active:true,loginEnabled:true};
+const mixedAccountFlags={...base,users:[...base.users.map(person=>person.id==='rahul'?{...person,loginEnabled:'true' as const}:person),jeevan]};
+assert.ok(connectedPeople(mixedAccountFlags).some(person=>person.id==='jeevan'),'Boolean true accounts are included alongside string true accounts');
+const teamPickerHtml=renderToStaticMarkup(createElement(NewProject,{data:mixedAccountFlags,user:base.users.find(person=>person.id==='manoj')!,mutate:()=>{},close:()=>{}}));
+assert.ok(teamPickerHtml.includes('Jeevan'),'Jeevan appears in the project team-member picker');
+const jeevanOnTeam=projectService.addTeamMember(mixedAccountFlags,'sudiksha','villa-60','jeevan');
+assert.ok(jeevanOnTeam.projects[0].teamIds.includes('jeevan'),'Jeevan can be added to a project team');
+const jeevanProjectHtml=renderToStaticMarkup(createElement(SimpleProject,{data:jeevanOnTeam,user:jeevan,projectId:'villa-60',initialWorkItemId:'assigned-work',openDetailOnEntry:false,back:()=>{},mutate:()=>{}}));
+assert.ok(jeevanProjectHtml.includes('Assign to myself'),'Jeevan sees Assign to myself for available project work');
+const jeevanClaimed=workItemService.claim(jeevanOnTeam,'jeevan','assigned-work');
+assert.ok(jeevanClaimed.workItems[0].assigneeIds?.includes('jeevan'),'Jeevan can assign project work to himself');
+const jeevanClaimedHtml=renderToStaticMarkup(createElement(SimpleProject,{data:jeevanClaimed,user:jeevan,projectId:'villa-60',initialWorkItemId:'assigned-work',openDetailOnEntry:false,back:()=>{},mutate:()=>{}}));
+assert.ok(jeevanClaimedHtml.includes('Need help'),'Jeevan sees Need Help after self-assignment');
+const jeevanHelp=helpRequestService.create(jeevanClaimed,'jeevan',{workItemId:'assigned-work',reason:'Need guidance'});
+assert.equal(jeevanHelp.helpRequests[0]?.raisedBy,'jeevan','Jeevan can request help after self-assignment');
 const generalMeeting=meetingService.create(base,'rahul',{date:'2026-09-18',title:' Studio coordination ',projectId:null,attendeeIds:['rahul','sudiksha','rahul'],notes:'Discussed staffing.'});
 assert.equal(generalMeeting.meetings?.[0].title,'Studio coordination');
 assert.deepEqual(generalMeeting.meetings?.[0].attendeeIds,['rahul','sudiksha']);

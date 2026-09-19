@@ -13,10 +13,18 @@ export function jobRole(person:User) {
   return person.access==='admin'?'Principal Architect':person.title;
 }
 
+export function enabledAccountFlag(value:boolean|'true'|'false'|undefined) {
+  return value === undefined || value === true || value === 'true';
+}
+
+export function isConnectedPerson(person:User) {
+  return Boolean(person.authUid) && enabledAccountFlag(person.active) && enabledAccountFlag(person.loginEnabled);
+}
+
 export function presentUser(person:User):User {
   const name=displayNameFromEmail(person);
   if(person.name!==name)originalDisplayNames.set(person.name,name);
-  return {...person,name,initials:name.slice(0,1).toUpperCase()};
+  return {...person,name,initials:name.slice(0,1).toUpperCase(),loginEnabled:enabledAccountFlag(person.loginEnabled)};
 }
 
 export function displayActivityText(value:string) {
@@ -28,5 +36,5 @@ export function displayActivityText(value:string) {
 // Firebase Auth UID is linked to the stable user ID through authProfiles.
 // Unlinked prototype people must never appear as assignable staff.
 export const connectedPeople = (data:AppData) => data.users.filter(person =>
-  Boolean(person.authUid) && person.active !== false && person.loginEnabled !== false,
+  isConnectedPerson(person),
 );

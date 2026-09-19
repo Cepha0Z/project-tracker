@@ -1,6 +1,7 @@
 import type { AppData, DecisionOutcome } from '../types';
 import { makeId, now, withActivity } from './shared';
 import { permissions } from '../permissions/permissions';
+import { isConnectedPerson } from '../domain/people';
 
 export const helpRequestService = {
   create(data:AppData,actorId:string,input:{workItemId:string;reason:string}):AppData {
@@ -8,9 +9,9 @@ export const helpRequestService = {
     if(!item)return data;
     const project=data.projects.find(candidate=>candidate.id===item.projectId);
     const actor=data.users.find(user=>user.id===actorId);
-    if(!project||!actor||actor.access!=='employee'||item.archived||item.status==='Completed'||!project.teamIds.includes(actorId)||!permissions.canUpdateOwnWork(actor,item))return data;
+    if(!project||!actor||!isConnectedPerson(actor)||actor.access!=='employee'||item.archived||item.status==='Completed'||!project.teamIds.includes(actorId)||!permissions.canUpdateOwnWork(actor,item))return data;
     if(data.helpRequests.some(request=>request.workItemId===item.id&&request.status!=='Resolved'))return data;
-    const admins=data.users.filter(user=>user.authUid&&user.active!==false&&user.access==='admin');
+    const admins=data.users.filter(user=>isConnectedPerson(user)&&user.access==='admin');
     if(!admins.length)return data;
 
     const stamp=now();
@@ -54,7 +55,7 @@ export const helpRequestService = {
     const actor=data.users.find(user=>user.id===actorId);
     const item=data.workItems.find(candidate=>candidate.id===request.workItemId);
     if(!project||!actor||!permissions.canEscalateToPrincipal(actor,project,request,item))return data;
-    const admins=data.users.filter(user=>user.authUid&&user.active!==false&&user.access==='admin');
+    const admins=data.users.filter(user=>isConnectedPerson(user)&&user.access==='admin');
     if(!admins.length)return data;
     const stamp=now();
     const next={...data,helpRequests:data.helpRequests.map(candidate=>candidate.id===requestId?{

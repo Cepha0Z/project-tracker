@@ -260,13 +260,14 @@ export function NotificationCenter({data,user,openHelp,openReport}:{data:AppData
 }
 
 export function SimpleReports({data,user,focusReportId,focusUpdateId}:{data:AppData;user:User;focusReportId?:string;focusUpdateId?:string}){
-  const allowedProjects=user.access==='admin'?data.projects:data.projects.filter(project=>project.leadId===user.id);
-  const visibleReporters=new Set(user.access==='admin'?data.users.map(person=>person.id):user.access==='employee'&&!allowedProjects.length?[user.id]:[...allowedProjects.flatMap(project=>project.teamIds),user.id]);
+  const allowedProjects=user.access==='admin'?data.projects:data.projects.filter(project=>permissions.canViewProject(user,project));
+  const managedProjects=user.access==='admin'?data.projects:data.projects.filter(project=>project.leadId===user.id);
+  const visibleReporters=new Set(user.access==='admin'?data.users.map(person=>person.id):!managedProjects.length?[user.id]:[...managedProjects.flatMap(project=>project.teamIds),user.id]);
   const [period,setPeriod]=useState<'today'|'week'|'all'>('all'),[projectId,setProjectId]=useState('all'),[personId,setPersonId]=useState('all'),[logsOpen,setLogsOpen]=useState(Boolean(focusReportId));
   useEffect(()=>{if(!focusReportId)return;setLogsOpen(true);setPeriod('all');setProjectId('all');setPersonId('all');const targetId=focusUpdateId||data.updates.find(update=>update.reportId===focusReportId)?.id;const timer=window.setTimeout(()=>document.getElementById(targetId?`report-update-${targetId}`:`report-custom-${focusReportId}`)?.scrollIntoView({behavior:'smooth',block:'center'}),80);return()=>window.clearTimeout(timer)},[focusReportId,focusUpdateId,data.updates]);
   const startOfWeek=new Date();startOfWeek.setHours(0,0,0,0);startOfWeek.setDate(startOfWeek.getDate()-6);
   const inPeriod=(createdAt:string)=>period==='all'||(period==='today'?localDateKey(new Date(createdAt))===today():new Date(createdAt)>=startOfWeek);
-  const visibleUpdates=data.updates.filter(update=>(user.access==='admin'||allowedProjects.some(project=>project.id===update.projectId)||update.userId===user.id)&&visibleReporters.has(update.userId));
+  const visibleUpdates=data.updates.filter(update=>(user.access==='admin'||managedProjects.some(project=>project.id===update.projectId)||update.userId===user.id)&&visibleReporters.has(update.userId));
   const visibleReports=(data.dailyReports||[]).filter(report=>visibleReporters.has(report.userId)).filter(report=>user.access==='admin'||report.userId===user.id||report.updateIds.some(id=>visibleUpdates.some(update=>update.id===id)));
   const todaysReports=visibleReports.filter(report=>report.date===today()).sort((left,right)=>right.createdAt.localeCompare(left.createdAt));
   const filteredUpdates=visibleUpdates.filter(update=>projectId==='all'||update.projectId===projectId).filter(update=>personId==='all'||update.userId===personId).filter(update=>inPeriod(update.createdAt));
@@ -274,7 +275,7 @@ export function SimpleReports({data,user,focusReportId,focusUpdateId}:{data:AppD
   const rows=[...filteredUpdates.map(update=>({kind:'update' as const,createdAt:update.createdAt,update})),...customReports.map(report=>({kind:'custom' as const,createdAt:report.createdAt,report}))].sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   const allLogCount=visibleUpdates.length+visibleReports.filter(report=>report.customWork?.trim()).length;
   const people=data.users.filter(person=>visibleReporters.has(person.id)&&(visibleUpdates.some(update=>update.userId===person.id)||visibleReports.some(report=>report.userId===person.id)));
-  const expectedIds=user.access==='admin'?data.users.filter(person=>person.id!==user.id&&enabledAccountFlag(person.loginEnabled)).map(person=>person.id):allowedProjects.length?[...new Set(allowedProjects.flatMap(project=>project.teamIds))]:[user.id];
+  const expectedIds=user.access==='admin'?data.users.filter(person=>person.id!==user.id&&enabledAccountFlag(person.loginEnabled)).map(person=>person.id):managedProjects.length?[...new Set(managedProjects.flatMap(project=>project.teamIds))]:[user.id];
   const reportedToday=new Set((data.dailyReports||[]).filter(report=>report.date===today()).map(report=>report.userId));
   return <div className="page simple-page report-feed-page">
     <div className="simple-title"><p>REPORTS</p><h1>Today’s Report</h1><span>Actual Daily Reports submitted today.</span></div>

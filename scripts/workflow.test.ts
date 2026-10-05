@@ -308,6 +308,15 @@ assert.ok(noteOnlyReportsHtml.includes('No Daily Reports have been submitted tod
 assert.ok(!noteOnlyReportsHtml.includes('A note is not a submitted report.'),'collapsed All Logs keeps the complete update stream out of the default view');
 const expandedLogsHtml=renderToStaticMarkup(createElement(SimpleReports,{data:reportWithAllLogs,user:base.users.find(person=>person.id==='manoj')!,focusReportId:both.dailyReports![0].id}));
 assert.ok(expandedLogsHtml.includes('aria-expanded="true"')&&expandedLogsHtml.includes('Quick coordination note outside the Daily Report.')&&expandedLogsHtml.includes('Revise the island dimensions.')&&expandedLogsHtml.includes('Note · Villa 60')&&expandedLogsHtml.includes('Reopen / Changes · Villa 60')&&expandedLogsHtml.includes('Daily Report · Villa 60'),'expanded All Logs includes quick notes, reopen history, and historical Daily Report entries');
+const employeeReportsHtml=renderToStaticMarkup(createElement(SimpleReports,{data:reportWithAllLogs,user:base.users.find(person=>person.id==='rahul')!,focusReportId:both.dailyReports![0].id}));
+for(const marker of ['report-feed-page','Today’s Report','reporting-status','today-report-feed','all-logs','report-filters','daily-feed','Date','Project','Person']){
+  assert.ok(expandedLogsHtml.includes(marker)&&employeeReportsHtml.includes(marker),`admin and employee Reports share ${marker}`);
+}
+for(const html of [expandedLogsHtml,employeeReportsHtml])assert.deepEqual(['reporting-status','today-report-feed','all-logs','report-filters','daily-feed'].map(marker=>html.indexOf(marker)),['reporting-status','today-report-feed','all-logs','report-filters','daily-feed'].map(marker=>html.indexOf(marker)).sort((left,right)=>left-right),'Admin and employee Reports use the same section order');
+assert.ok(employeeReportsHtml.includes('<option value="villa-60">Villa 60</option>'),'employee Reports uses accessible projects in the same Project filter as Admin Reports');
+const coworkerUpdate={...reportWithAllLogs.updates[0],id:'coworker-private',userId:'sudiksha',text:'Coworker report outside employee visibility.'};
+const employeeScopedHtml=renderToStaticMarkup(createElement(SimpleReports,{data:{...reportWithAllLogs,updates:[coworkerUpdate,...reportWithAllLogs.updates]},user:base.users.find(person=>person.id==='rahul')!,focusReportId:both.dailyReports![0].id}));
+assert.ok(!employeeScopedHtml.includes('Coworker report outside employee visibility.'),'matching the Admin layout does not expand employee report permissions');
 const customHistory=renderToStaticMarkup(createElement(SimpleReports,{data:customOnly,user:base.users.find(person=>person.id==='manoj')!,focusReportId:customOnly.dailyReports![0].id}));
 assert.ok(customHistory.includes('Other work')&&customHistory.includes('Visited the site for measurements.'));
 const ownHistory=renderToStaticMarkup(createElement(SimpleReports,{data:customOnly,user:base.users.find(person=>person.id==='rahul')!,focusReportId:customOnly.dailyReports![0].id}));

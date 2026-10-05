@@ -73,5 +73,11 @@ export const workItemService = {
     const next={...data,workItems:data.workItems.map(work=>positions.has(work.id)?{...work,sortOrder:positions.get(work.id),updatedAt:stamp}:work)};
     return withActivity(next,item.projectId,actorId,`reordered ${item.name}`);
   },
-  archive(data:AppData, actorId:string, itemId:string):AppData { const item=data.workItems.find(w=>w.id===itemId),project=data.projects.find(p=>p.id===item?.projectId),actor=data.users.find(u=>u.id===actorId); if(!item||!project||!actor||!permissions.canManageWorkItem(actor,project)) return data; return withActivity({...data,workItems:data.workItems.map(w=>w.id===itemId?{...w,archived:true,updatedAt:new Date().toISOString()}:w)},item.projectId,actorId,`deleted ${item.name}`); },
+  delete(data:AppData, actorId:string, itemId:string):AppData {
+    const item=data.workItems.find(work=>work.id===itemId),project=data.projects.find(candidate=>candidate.id===item?.projectId),actor=data.users.find(person=>person.id===actorId);
+    if(!item||!project||!actor||!permissions.canManageWorkItem(actor,project))return data;
+    const next={...data,workItems:data.workItems.filter(work=>work.id!==itemId),helpRequests:data.helpRequests.filter(request=>request.workItemId!==itemId),cycles:data.cycles.map(cycle=>cycle.deliverableIds?.includes(itemId)?{...cycle,deliverableIds:cycle.deliverableIds.filter(id=>id!==itemId)}:cycle)};
+    return withActivity(next,item.projectId,actorId,`permanently deleted ${item.name}`);
+  },
+  archive(data:AppData, actorId:string, itemId:string):AppData { const item=data.workItems.find(w=>w.id===itemId),project=data.projects.find(p=>p.id===item?.projectId),actor=data.users.find(u=>u.id===actorId); if(!item||!project||!actor||!permissions.canManageWorkItem(actor,project)) return data; return withActivity({...data,workItems:data.workItems.map(w=>w.id===itemId?{...w,archived:true,updatedAt:new Date().toISOString()}:w)},item.projectId,actorId,`archived ${item.name}`); },
 };

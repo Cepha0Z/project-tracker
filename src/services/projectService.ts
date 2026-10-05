@@ -85,10 +85,12 @@ export const projectService = {
   },
   deleteSection(data:AppData, actorId:string, projectId:string, name:string):AppData {
     const project=data.projects.find(p=>p.id===projectId),actor=data.users.find(u=>u.id===actorId);
-    if(!project||!actor||!permissions.canEditSections(actor,project)||project.stages.length<=1||!project.stages.some(stage=>stage.name===name)||data.workItems.some(item=>item.projectId===projectId&&(item.stageId||item.stage)===name))return data;
+    const removedItems=data.workItems.filter(item=>item.projectId===projectId&&(item.stageId||item.stage)===name),removedIds=new Set(removedItems.map(item=>item.id));
+    if(!project||!actor||!permissions.canEditSections(actor,project)||project.stages.length<=1||!project.stages.some(stage=>stage.name===name)||(removedItems.length>0&&!permissions.canManageProject(actor,project)))return data;
     const updated={...project,stages:project.stages.filter(stage=>stage.name!==name)};
-    updated.currentStage=currentProjectStage(data,updated)||updated.stages.at(-1)!.name;
-    return withActivity({...data,projects:data.projects.map(p=>p.id===projectId?updated:p)},projectId,actorId,`deleted empty section ${name}`);
+    const withoutSection={...data,workItems:data.workItems.filter(item=>!removedIds.has(item.id)),helpRequests:data.helpRequests.filter(request=>!removedIds.has(request.workItemId)),cycles:data.cycles.map(cycle=>cycle.projectId===projectId&&cycle.deliverableIds?.some(id=>removedIds.has(id))?{...cycle,deliverableIds:cycle.deliverableIds.filter(id=>!removedIds.has(id))}:cycle)};
+    updated.currentStage=currentProjectStage(withoutSection,updated)||updated.stages.at(-1)!.name;
+    return withActivity({...withoutSection,projects:data.projects.map(p=>p.id===projectId?updated:p)},projectId,actorId,`permanently deleted section ${name} and ${removedItems.length} deliverable${removedItems.length===1?'':'s'}`);
   },
   setStage(data:AppData, actorId:string, projectId:string, stageName:string):AppData {
     const project=data.projects.find(p=>p.id===projectId)!; const old=project.currentStage; const idx=project.stages.findIndex(s=>s.name===stageName);

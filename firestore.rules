@@ -415,7 +415,7 @@ service cloud.firestore {
             ])
           )
         );
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || (activeUser() && canManageProject(resource.data.projectId));
     }
 
     match /activity/{id} {

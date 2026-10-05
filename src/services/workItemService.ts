@@ -15,7 +15,7 @@ const transition=(item:WorkItem,status:WorkStatus,progress:number,stamp:string):
   return {status,progress,startedAt,completedAt,activeElapsedMinutes,blockedReason:status==='Blocked'?item.blockedReason:undefined,updatedAt:stamp};
 };
 export const workItemService = {
-  create(data:AppData, actorId:string, input:WorkInput):AppData { const project=data.projects.find(p=>p.id===input.projectId),actor=data.users.find(u=>u.id===actorId),assignees=input.assigneeIds?.length?input.assigneeIds:[input.assigneeId]; if(!project||!actor||!permissions.canAddDeliverable(actor,project)||!project.stages.some(stage=>stage.name===input.stage)||!assignees.length||assignees.some(id=>!project.teamIds.includes(id)||!data.users.some(person=>person.id===id&&isConnectedPerson(person)))) return data; const stamp=new Date().toISOString(); const item:WorkItem={...input,id:makeId('deliverable'),assigneeId:assignees[0],assigneeIds:assignees,stageId:input.stage,scopeNotes:input.scopeNotes||input.notes||'',subItems:input.subItems||[],required:input.required??true,createdBy:actorId,createdAt:stamp,updatedAt:stamp,dueLabel:dueLabel(input.dueDate),status:'Not Started',progress:0,hours:0,activeElapsedMinutes:0,archived:false}; const next={...data,workItems:[...data.workItems,item],cycles:data.cycles.map(c=>c.id===input.cycleId?{...c,deliverableIds:[...(c.deliverableIds||[]),item.id]}:c)}; return withActivity(next,input.projectId,actorId,`created deliverable ${item.name}`); },
+  create(data:AppData, actorId:string, input:WorkInput):AppData { const project=data.projects.find(p=>p.id===input.projectId),actor=data.users.find(u=>u.id===actorId),assignees=input.assigneeIds?.length?input.assigneeIds:[input.assigneeId]; if(!project||!actor||!permissions.canAddDeliverable(actor,project)||!project.stages.some(stage=>stage.name===input.stage)||!assignees.length||assignees.some(id=>!project.teamIds.includes(id)||!data.users.some(person=>person.id===id&&isConnectedPerson(person)))) return data; const stamp=new Date().toISOString(); const sectionItems=data.workItems.filter(work=>work.projectId===input.projectId&&!work.archived&&(work.stageId||work.stage)===input.stage),sortOrder=sectionItems.reduce((maximum,work,index)=>Math.max(maximum,work.sortOrder??index),-1)+1; const item:WorkItem={...input,id:makeId('deliverable'),assigneeId:assignees[0],assigneeIds:assignees,stageId:input.stage,scopeNotes:input.scopeNotes||input.notes||'',subItems:input.subItems||[],required:input.required??true,createdBy:actorId,createdAt:stamp,updatedAt:stamp,dueLabel:dueLabel(input.dueDate),status:'Not Started',progress:0,hours:0,activeElapsedMinutes:0,archived:false,sortOrder}; const next={...data,workItems:[...data.workItems,item],cycles:data.cycles.map(c=>c.id===input.cycleId?{...c,deliverableIds:[...(c.deliverableIds||[]),item.id]}:c)}; return withActivity(next,input.projectId,actorId,`created deliverable ${item.name}`); },
   moveToSection(data:AppData, actorId:string, itemId:string, section:string):AppData {
     const item=data.workItems.find(work=>work.id===itemId),project=data.projects.find(candidate=>candidate.id===item?.projectId),actor=data.users.find(person=>person.id===actorId);
     if(!item||!project||!actor||!permissions.canEditSections(actor,project)||!project.stages.some(stage=>stage.name===section)||(item.stageId||item.stage)===section)return data;
@@ -59,5 +59,19 @@ export const workItemService = {
     const next={...data,workItems:data.workItems.map(work=>work.id===itemId?{...work,assigneeIds:[...assigneeIds,actorId],updatedAt:new Date().toISOString()}:work)};
     return withActivity(next,item.projectId,actorId,`assigned ${item.name} to themselves`);
   },
-  archive(data:AppData, actorId:string, itemId:string):AppData { const item=data.workItems.find(w=>w.id===itemId)!,project=data.projects.find(p=>p.id===item.projectId)!,actor=data.users.find(u=>u.id===actorId); if(!actor||!permissions.canManageWorkItem(actor,project)) return data; return withActivity({...data,workItems:data.workItems.map(w=>w.id===itemId?{...w,archived:true}:w)},item.projectId,actorId,`archived ${item.name}`); },
+  reorder(data:AppData, actorId:string, itemId:string, direction:-1|1):AppData {
+    const item=data.workItems.find(work=>work.id===itemId),project=data.projects.find(candidate=>candidate.id===item?.projectId),actor=data.users.find(person=>person.id===actorId);
+    if(!item||!project||!actor||!permissions.canManageWorkItem(actor,project)||item.archived)return data;
+    const stage=item.stageId||item.stage;
+    const fallbackOrder=new Map(data.workItems.map((work,index)=>[work.id,index]));
+    const peers=data.workItems.filter(work=>work.projectId===item.projectId&&!work.archived&&(work.stageId||work.stage)===stage).sort((left,right)=>(left.sortOrder??fallbackOrder.get(left.id)??0)-(right.sortOrder??fallbackOrder.get(right.id)??0));
+    const index=peers.findIndex(work=>work.id===itemId),target=index+direction;
+    if(index<0||target<0||target>=peers.length)return data;
+    [peers[index],peers[target]]=[peers[target],peers[index]];
+    const positions=new Map(peers.map((work,position)=>[work.id,position]));
+    const stamp=new Date().toISOString();
+    const next={...data,workItems:data.workItems.map(work=>positions.has(work.id)?{...work,sortOrder:positions.get(work.id),updatedAt:stamp}:work)};
+    return withActivity(next,item.projectId,actorId,`reordered ${item.name}`);
+  },
+  archive(data:AppData, actorId:string, itemId:string):AppData { const item=data.workItems.find(w=>w.id===itemId),project=data.projects.find(p=>p.id===item?.projectId),actor=data.users.find(u=>u.id===actorId); if(!item||!project||!actor||!permissions.canManageWorkItem(actor,project)) return data; return withActivity({...data,workItems:data.workItems.map(w=>w.id===itemId?{...w,archived:true,updatedAt:new Date().toISOString()}:w)},item.projectId,actorId,`deleted ${item.name}`); },
 };

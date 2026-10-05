@@ -20,6 +20,13 @@ export function projectWorkItems(data: AppData, projectId: string) {
   return data.workItems.filter(item => item.projectId === projectId && !item.archived);
 }
 
+export function orderedWorkItems(data: AppData, items: WorkItem[]) {
+  const fallbackOrder = new Map(data.workItems.map((item, index) => [item.id, index]));
+  return [...items].sort((left, right) =>
+    (left.sortOrder ?? fallbackOrder.get(left.id) ?? 0) - (right.sortOrder ?? fallbackOrder.get(right.id) ?? 0),
+  );
+}
+
 export function employeeWorkItems(data: AppData, userId: string) {
   return data.workItems.filter(item => !item.archived && workItemAssigneeIds(item).includes(userId));
 }

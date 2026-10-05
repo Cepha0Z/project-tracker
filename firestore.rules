@@ -219,6 +219,12 @@ service cloud.firestore {
         && (
         (canManageProject(resource.data.projectId) && resource.data.status != 'Blocked')
         || (
+          canManageProject(resource.data.projectId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'sortOrder', 'archived', 'updatedAt'
+          ])
+        )
+        || (
           isProjectMember(resource.data.projectId)
           && request.resource.data.stage == request.resource.data.stageId
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stage', 'stageId'])

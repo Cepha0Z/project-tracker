@@ -50,6 +50,7 @@ export interface WorkItem {
   startedAt?: string;
   completedAt?: string;
   activeElapsedMinutes?: number;
+  sortOrder?: number;
 }
 
 export interface DeliverableSubItem {

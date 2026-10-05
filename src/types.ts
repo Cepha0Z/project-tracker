@@ -75,6 +75,8 @@ export interface DailyUpdate {
   reportId?: string;
   previousProgress?: number;
   progressDelta?: number;
+  kind?: 'note' | 'reopen';
+  newDueDate?: string;
 }
 
 export interface HelpRequest {

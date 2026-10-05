@@ -5,6 +5,22 @@ import { workItemService } from './workItemService';
 import { localDateKey } from '../domain/selectors';
 
 export const updateService = {
+  addNote(data:AppData, actorId:string, workItemId:string, text:string):AppData {
+    const item=data.workItems.find(work=>work.id===workItemId),project=data.projects.find(candidate=>candidate.id===item?.projectId),actor=data.users.find(person=>person.id===actorId),note=text.trim();
+    if(!item||!project||!actor||item.archived||!note||!(permissions.canManageWorkItem(actor,project)||permissions.canUpdateOwnWork(actor,item)))return data;
+    const createdAt=now();
+    const update:DailyUpdate={id:makeId('update'),projectId:item.projectId,workItemId:item.id,userId:actorId,text:note,progress:item.progress,previousProgress:item.progress,progressDelta:0,minutes:0,status:item.status,createdAt,cycleId:item.cycleId,kind:'note'};
+    return withActivity({...data,updates:[update,...data.updates]},item.projectId,actorId,`added an update to ${item.name}`,createdAt);
+  },
+  reopenForChanges(data:AppData, actorId:string, workItemId:string, input:{changes:string;dueDate:string}):AppData {
+    const item=data.workItems.find(work=>work.id===workItemId),project=data.projects.find(candidate=>candidate.id===item?.projectId),actor=data.users.find(person=>person.id===actorId),changes=input.changes.trim();
+    if(!item||!project||!actor||item.archived||item.status!=='Completed'||!changes||!/^\d{4}-\d{2}-\d{2}$/.test(input.dueDate)||!(permissions.canManageWorkItem(actor,project)||permissions.canUpdateOwnWork(actor,item)))return data;
+    const createdAt=now();
+    const reopened=workItemService.update(data,actorId,item.id,{status:'In Progress',progress:0,dueDate:input.dueDate});
+    if(reopened===data)return data;
+    const update:DailyUpdate={id:makeId('update'),projectId:item.projectId,workItemId:item.id,userId:actorId,text:changes,progress:0,previousProgress:item.progress,progressDelta:-item.progress,minutes:0,status:'In Progress',createdAt,cycleId:item.cycleId,kind:'reopen',newDueDate:input.dueDate};
+    return withActivity({...reopened,updates:[update,...reopened.updates]},item.projectId,actorId,`reopened ${item.name} for changes`,createdAt);
+  },
   createReport(data:AppData, actorId:string, input:{summary:string;customWork?:string;entries:{workItemId:string;progress:number;minutes?:number;status:WorkStatus;note?:string;blocker?:string}[]}):AppData {
     const actor=data.users.find(u=>u.id===actorId),customWork=input.customWork?.trim()||''; if(!actor||(!input.entries.length&&!customWork))return data;
     const reportId=makeId('report'),createdAt=now(); let next=data; const updateIds:string[]=[]; const projectIds=new Set<string>();const reportItems:NonNullable<NonNullable<AppData['dailyReports']>[number]['items']>=[];

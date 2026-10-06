@@ -83,7 +83,7 @@ export default function App(){
         {page==='work'&&<EmployeeWorkspace data={data} user={user} openWorkItem={openOverviewItem} mutate={mutate} showAll/>}
         {page==='people'&&<SimplePeople data={data} user={user} mutate={mutate}/>} 
         {page==='meetings'&&<MeetingsPage data={data} user={user} mutate={mutate}/>}
-        {page==='reports'&&<SimpleReports data={data} user={user} focusReportId={targetReportId} focusUpdateId={targetUpdateId}/>}
+        {page==='reports'&&<SimpleReports data={data} user={user} mutate={mutate} focusReportId={targetReportId} focusUpdateId={targetUpdateId}/>}
         {page==='notifications'&&<NotificationCenter data={data} user={user} openHelp={openWorkItem} openReport={openReport}/>}</>
       </main>
     </div>

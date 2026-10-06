@@ -118,13 +118,22 @@ service cloud.firestore {
         && meeting.keys().hasOnly(['id', 'date', 'title', 'projectId', 'attendeeIds', 'notes', 'createdBy', 'createdAt'])
         && meeting.id == meetingId
         && meeting.projectId == projectId
-        && meeting.createdBy == userId()
+        && (meeting.createdBy == userId() || isAdmin())
         && meeting.createdAt is timestamp
         && meeting.date is string
         && meeting.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && meeting.title is string && meeting.title.size() > 0 && meeting.title.size() <= 160
         && meeting.notes is string && meeting.notes.size() <= 20000
         && meeting.attendeeIds is list && meeting.attendeeIds.size() <= 100;
+    }
+
+    function validMeetingUpdateData(meetingId, projectId) {
+      return validMeetingData(meetingId, projectId)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'date', 'title', 'projectId', 'attendeeIds', 'notes'
+        ]);
     }
 
     match /authProfiles/{uid} {
@@ -190,15 +199,17 @@ service cloud.firestore {
     match /projects/{projectId}/meetings/{meetingId} {
       allow read: if activeUser() && isProjectMember(projectId);
       allow create: if activeUser() && isProjectMember(projectId) && validMeetingData(meetingId, projectId);
-      // Meeting records are immutable; admin project deletion cleans up its records.
-      allow update: if false;
-      allow delete: if isAdmin();
+      allow update: if activeUser() && (resource.data.createdBy == userId() || isAdmin())
+        && validMeetingUpdateData(meetingId, projectId);
+      allow delete: if activeUser() && (resource.data.createdBy == userId() || isAdmin());
     }
 
     match /generalMeetings/{meetingId} {
       allow read: if activeUser();
       allow create: if activeUser() && validMeetingData(meetingId, null);
-      allow update, delete: if false;
+      allow update: if activeUser() && (resource.data.createdBy == userId() || isAdmin())
+        && validMeetingUpdateData(meetingId, null);
+      allow delete: if activeUser() && (resource.data.createdBy == userId() || isAdmin());
     }
 
     match /workItems/{id} {
@@ -280,7 +291,11 @@ service cloud.firestore {
       allow create: if activeUser() && request.resource.data.userId == userId();
       allow update: if activeUser() && resource.data.userId == userId()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text']);
-      allow delete: if isAdmin();
+      allow delete: if activeUser() && (resource.data.userId == userId() || isAdmin())
+        && (
+          !resource.data.keys().hasAny(['reportId'])
+          || !existsAfter(/databases/$(database)/documents/dailyReports/$(resource.data.reportId))
+        );
     }
 
     match /dailyReports/{id} {
@@ -307,7 +322,7 @@ service cloud.firestore {
             && resource.data.items.hasAll(request.resource.data.items)
           )
         );
-      allow delete: if isAdmin();
+      allow delete: if activeUser() && (resource.data.userId == userId() || isAdmin());
     }
 
     match /helpRequests/{id} {
@@ -437,7 +452,7 @@ service cloud.firestore {
       allow read: if activeUser();
       allow create: if activeUser() && request.resource.data.userId == userId();
       allow update: if false;
-      allow delete: if isAdmin();
+      allow delete: if activeUser() && (resource.data.userId == userId() || isAdmin());
     }
   }
 }

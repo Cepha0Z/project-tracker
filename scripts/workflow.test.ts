@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { seedData } from '../src/data/seed';
 import { connectedPeople, displayActivityText, displayNameFromEmail, enabledAccountFlag, jobRole, presentUser } from '../src/domain/people';
-import { PROJECT_STAGE_ORDER, currentProjectStage, employeeActiveWork, employeeWorkItems, projectCardOrder, projectCardState, projectHealth, workItemDaysBehind } from '../src/domain/selectors';
+import { PROJECT_STAGE_ORDER, currentProjectStage, employeeActiveWork, employeeWorkItems, projectCardOrder, projectCardState, projectHealth, rollingWorkItems, workItemDaysBehind } from '../src/domain/selectors';
 import { notificationChanges } from '../src/services/notificationEvents';
 import { helpRequestService } from '../src/services/helpRequestService';
 import { MAX_PROJECT_DELETION_OPERATIONS, projectDeletionImpact, projectService } from '../src/services/projectService';
@@ -66,6 +66,12 @@ const meetingListHtml=renderToStaticMarkup(createElement(MeetingsPage,{data:proj
 assert.ok(meetingListHtml.includes('New Meeting')&&meetingListHtml.includes('Kitchen review')&&meetingListHtml.includes('General / No Project')&&meetingListHtml.includes('Sudiksha'));
 const outsiderMeetingsHtml=renderToStaticMarkup(createElement(MeetingsPage,{data:projectMeeting,user:outsider,mutate:()=>{}}));
 assert.ok(!outsiderMeetingsHtml.includes('Kitchen review'));
+const kitchenMeeting=projectMeeting.meetings!.find(meeting=>meeting.title==='Kitchen review')!;
+const editedMeeting=meetingService.update(projectMeeting,'rahul',kitchenMeeting.id,{date:'2026-09-19',title:'Kitchen review revised',projectId:'villa-60',attendeeIds:['rahul','sudiksha'],notes:'Updated decisions.'});
+assert.equal(editedMeeting.meetings?.find(meeting=>meeting.id===kitchenMeeting.id)?.title,'Kitchen review revised','meeting creator can edit their meeting');
+assert.equal(meetingService.update(projectMeeting,'sudiksha',kitchenMeeting.id,{date:'2026-09-19',title:'Unauthorized',projectId:'villa-60',attendeeIds:[],notes:''}),projectMeeting,'another employee cannot edit a meeting they did not create');
+assert.equal(meetingService.delete(projectMeeting,'sudiksha',kitchenMeeting.id),projectMeeting,'another employee cannot delete a meeting they did not create');
+assert.equal(meetingService.delete(projectMeeting,'rahul',kitchenMeeting.id).meetings?.some(meeting=>meeting.id===kitchenMeeting.id),false,'meeting creator can delete their meeting');
 assert.deepEqual(connectedPeople(base).map(user=>user.id),['kiran','manoj','sudiksha','rahul']);
 assert.equal(displayNameFromEmail({email:'kiran@nebulous.com',name:'Wrong Surname'}),'Kiran');
 assert.equal(displayNameFromEmail({email:'cephajj@nebulousdesign.com',name:'CephaJJ'}),'CephaJJ');
@@ -105,9 +111,9 @@ assert.ok(overviewHtml.includes('overview-yellow')&&overviewHtml.includes('item-
 assert.ok(!overviewHtml.includes('type="range"')&&!overviewHtml.includes('Start work')&&!overviewHtml.includes('Need help')&&!overviewHtml.includes('>Resolve<')&&!overviewHtml.includes('>Escalate<'),'Home project rows contain no work controls');
 assert.ok(overviewHtml.includes('aria-expanded="true"'),'Home project groups are expanded initially');
 const progressiveOverview=renderToStaticMarkup(createElement(OverviewProjectGroups,{data:stageFixture,projects:stageFixture.projects,work:stageFixture.workItems,openWorkItem:()=>{}}));
-assert.ok(progressiveOverview.includes('Kitchen Layout')&&!progressiveOverview.includes('Concept package'),'overview shows only the first incomplete section');
+assert.ok(progressiveOverview.includes('Kitchen Layout')&&progressiveOverview.includes('Concept package'),'overview uses the rolling due-date window across project sections');
 const advancedOverview=renderToStaticMarkup(createElement(OverviewProjectGroups,{data:briefDone,projects:briefDone.projects,work:briefDone.workItems,openWorkItem:()=>{}}));
-assert.ok(advancedOverview.includes('Concept Design')&&advancedOverview.includes('Concept package'),'overview advances after the current section completes');
+assert.ok(advancedOverview.includes('Concept Design')&&advancedOverview.includes('Concept package')&&!advancedOverview.includes('Kitchen Layout'),'completed work leaves the active rolling overview while section progression remains intact');
 const employeeOverviewData={...base,projects:[...base.projects,{...base.projects[0],id:'test-2',name:'Test 2',teamIds:['sudiksha']}],workItems:[...base.workItems,{...base.workItems[0],id:'unrelated-work',projectId:'test-2',name:'Unrelated deliverable',assigneeId:'sudiksha',assigneeIds:['sudiksha'],status:'Blocked' as const}]};
 const employeeHomeHtml=renderToStaticMarkup(createElement(EmployeeWorkspace,{data:employeeOverviewData,user:base.users.find(user=>user.id==='rahul')!,openWorkItem:()=>{},mutate:()=>{}}));
 const myWorkHtml=employeeHomeHtml.slice(employeeHomeHtml.indexOf('employee-home-section employee-my-work'),employeeHomeHtml.indexOf('employee-home-section employee-all-projects'));
@@ -118,7 +124,7 @@ assert.ok(!myWorkHtml.includes('type="range"')&&!allProjectsHtml.includes('type=
 const myWorkPageHtml=renderToStaticMarkup(createElement(EmployeeWorkspace,{data:employeeOverviewData,user:base.users.find(user=>user.id==='rahul')!,openWorkItem:()=>{},mutate:()=>{},showAll:true}));
 assert.ok(!myWorkPageHtml.includes('All Projects')&&!myWorkPageHtml.includes('Test 2'),'the existing My Work navigation stays assignment-only');
 const noAssignmentHtml=renderToStaticMarkup(createElement(EmployeeWorkspace,{data:employeeOverviewData,user:base.users.find(user=>user.id==='siddharth')!,openWorkItem:()=>{},mutate:()=>{}}));
-assert.ok(noAssignmentHtml.includes('No work assigned.')&&noAssignmentHtml.slice(noAssignmentHtml.indexOf('employee-home-section employee-all-projects')).includes('Test 2'),'an employee with no assignments still sees company projects only in All Projects');
+assert.ok(noAssignmentHtml.includes('No overdue or upcoming work in the next 2 weeks.')&&noAssignmentHtml.slice(noAssignmentHtml.indexOf('employee-home-section employee-all-projects')).includes('Test 2'),'an employee with no rolling-window assignments still sees company projects only in All Projects');
 const overviewProjectOnly=renderToStaticMarkup(createElement(SimpleProject,{data:base,user:base.users[0],projectId:'villa-60',initialWorkItemId:'assigned-work',openDetailOnEntry:false,back:()=>{},mutate:()=>{}}));
 assert.ok(overviewProjectOnly.includes('DOCUMENTATION')&&!overviewProjectOnly.includes('work-detail-simple'),'normal Home navigation selects the project section without opening editable detail');
 const explicitDetail=renderToStaticMarkup(createElement(SimpleProject,{data:base,user:base.users[0],projectId:'villa-60',initialWorkItemId:'assigned-work',openDetailOnEntry:true,back:()=>{},mutate:()=>{}}));
@@ -228,7 +234,7 @@ const laterHelp={...stageFixture,helpRequests:[{...normal.helpRequests[0],workIt
 assert.equal(currentProjectStage(laterHelp,laterHelp.projects[0]),'Brief');
 assert.equal(projectCardState(laterHelp,laterHelp.projects[0]),'red','future section help colors project red');
 const helpHtml=renderToStaticMarkup(createElement(OverviewProjectGroups,{data:laterHelp,projects:laterHelp.projects,work:laterHelp.workItems,openWorkItem:()=>{}}));
-assert.ok(helpHtml.includes('overview-red')&&!helpHtml.includes('Concept package'),'future-section help colors the project but does not expand future deliverables');
+assert.ok(helpHtml.includes('overview-red')&&helpHtml.includes('Concept package')&&helpHtml.includes('Needs help'),'rolling overview surfaces due work and help across future sections');
 const projectHelpHtml=renderToStaticMarkup(createElement(SimpleProject,{data:normal,user:base.users[0],projectId:'villa-60',back:()=>{},mutate:()=>{}}));
 assert.ok(projectHelpHtml.includes('resolve-help-direct')&&projectHelpHtml.includes('Open details'),'admin project card offers direct help resolution without removing access to work details');
 const laterHtml=renderToStaticMarkup(createElement(SimpleProject,{data:laterHelp,user:base.users[0],projectId:'villa-60',back:()=>{},mutate:()=>{}}));
@@ -403,4 +409,26 @@ assert.ok(!employeeArchivedProjects.includes('Archived projects')&&!employeeArch
 const restoredProjectData=projectService.unarchiveProject(archivedProjectData,'kiran','villa-60');
 assert.equal(restoredProjectData.projects.find(project=>project.id==='villa-60')?.archived,false,'admin can unarchive a project');
 assert.equal(employeeWorkItems(restoredProjectData,'rahul').some(item=>item.projectId==='villa-60'),true,'unarchiving restores project work visibility');
+
+const rollingSeed=fixture().workItems[0];
+const rollingItems:WorkItem[]=[
+  {...rollingSeed,id:'upcoming-later-section',name:'Upcoming later section',stage:'Site Stage',stageId:'Site Stage',dueDate:'2026-10-12',status:'Not Started'},
+  {...rollingSeed,id:'overdue-early-section',name:'Overdue early section',stage:'Brief',stageId:'Brief',dueDate:'2026-09-01',status:'In Progress'},
+  {...rollingSeed,id:'outside-window',name:'Outside window',dueDate:'2026-10-21',status:'Not Started'},
+  {...rollingSeed,id:'completed-in-window',name:'Completed',dueDate:'2026-10-08',status:'Completed'},
+];
+assert.deepEqual(rollingWorkItems([...rollingItems,rollingItems[1]],'2026-10-06').map(item=>item.id),['overdue-early-section','upcoming-later-section'],'rolling work is deduplicated, section-independent, overdue-first, and limited to 14 days');
+
+const reportDeletionBase=fixture(),reportUpdate={...reportDeletionBase.updates[0],id:'owned-report-update',userId:'rahul',reportId:'owned-report'},ownNote={...reportDeletionBase.updates[0],id:'owned-note',userId:'rahul',reportId:undefined,kind:'note' as const};
+const reportDeletionData:AppData={...reportDeletionBase,updates:[reportUpdate,ownNote],dailyReports:[{id:'owned-report',userId:'rahul',date:'2026-10-06',summary:'Today',createdAt:'2026-10-06T12:00:00Z',updateIds:['owned-report-update']}],timeEntries:[{id:'report-time',projectId:'villa-60',workItemId:'assigned-work',userId:'rahul',date:'2026-10-06',minutes:30,updateId:'owned-report-update'}]};
+assert.equal(updateService.deleteReport(reportDeletionData,'sudiksha','owned-report'),reportDeletionData,'employees cannot delete another employee report');
+const deletedReport=updateService.deleteReport(reportDeletionData,'rahul','owned-report');
+assert.equal(deletedReport.dailyReports?.length,0,'report author can delete their report');
+assert.ok(!deletedReport.updates.some(update=>update.id==='owned-report-update')&&deletedReport.updates.some(update=>update.id==='owned-note'),'report deletion removes only linked report updates');
+assert.equal(deletedReport.timeEntries.length,0,'report deletion removes linked time entries');
+assert.equal(updateService.deleteUpdate(reportDeletionData,'sudiksha','owned-note'),reportDeletionData,'employees cannot delete another employee note');
+assert.equal(updateService.deleteUpdate(reportDeletionData,'rahul','owned-report-update'),reportDeletionData,'Daily Report entries cannot be deleted as standalone notes');
+assert.equal(updateService.deleteUpdate(reportDeletionData,'rahul','owned-note').updates.some(update=>update.id==='owned-note'),false,'note author can delete their own note');
+const reportDeleteHtml=renderToStaticMarkup(createElement(SimpleReports,{data:reportDeletionData,user:reportDeletionData.users.find(person=>person.id==='rahul')!,mutate:()=>{}}));
+assert.ok(reportDeleteHtml.includes('Delete this Daily Report'),'report author sees a compact delete action on their report');
 console.log('Workflow service tests passed.');

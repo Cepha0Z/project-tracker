@@ -41,7 +41,27 @@ export function employeeWorkItems(data: AppData, userId: string) {
 }
 
 export function employeeActiveWork(data: AppData, userId: string) {
-  return employeeWorkItems(data, userId).filter(item => item.status !== 'Completed');
+  return rollingWorkItems(employeeWorkItems(data, userId));
+}
+
+function dateKeyAfter(date: string, days: number) {
+  const [year, month, day] = date.split('-').map(Number);
+  return localDateKey(new Date(year, month - 1, day + days));
+}
+
+export function isWorkItemInRollingWindow(item: WorkItem, date = localDateKey(), days = 14) {
+  return item.status !== 'Completed'
+    && /^\d{4}-\d{2}-\d{2}$/.test(item.dueDate)
+    && item.dueDate <= dateKeyAfter(date, days);
+}
+
+export function rollingWorkItems(items: WorkItem[], date = localDateKey(), days = 14) {
+  const unique = [...new Map(items.map(item => [item.id, item])).values()];
+  return unique.filter(item => !item.archived && isWorkItemInRollingWindow(item, date, days)).sort((left, right) => {
+    const leftOverdue = isWorkItemOverdue(left, date), rightOverdue = isWorkItemOverdue(right, date);
+    if (leftOverdue !== rightOverdue) return leftOverdue ? -1 : 1;
+    return left.dueDate.localeCompare(right.dueDate) || left.name.localeCompare(right.name);
+  });
 }
 
 export function isWorkItemOverdue(item: WorkItem, date = localDateKey()) {

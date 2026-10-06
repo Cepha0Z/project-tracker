@@ -5,6 +5,21 @@ import { workItemService } from './workItemService';
 import { localDateKey } from '../domain/selectors';
 
 export const updateService = {
+  deleteReport(data:AppData, actorId:string, reportId:string):AppData {
+    const actor=data.users.find(user=>user.id===actorId),report=(data.dailyReports||[]).find(entry=>entry.id===reportId);
+    if(!actor||!report||(report.userId!==actorId&&actor.access!=='admin'))return data;
+    const updateIds=new Set(data.updates.filter(update=>update.reportId===reportId||report.updateIds.includes(update.id)).map(update=>update.id));
+    return {...data,
+      dailyReports:(data.dailyReports||[]).filter(entry=>entry.id!==reportId),
+      updates:data.updates.filter(update=>!updateIds.has(update.id)),
+      timeEntries:data.timeEntries.filter(entry=>!entry.updateId||!updateIds.has(entry.updateId)),
+    };
+  },
+  deleteUpdate(data:AppData, actorId:string, updateId:string):AppData {
+    const update=data.updates.find(entry=>entry.id===updateId);
+    if(!update||update.userId!==actorId||Boolean(update.reportId))return data;
+    return {...data,updates:data.updates.filter(entry=>entry.id!==updateId),timeEntries:data.timeEntries.filter(entry=>entry.updateId!==updateId)};
+  },
   addNote(data:AppData, actorId:string, workItemId:string, text:string):AppData {
     const item=data.workItems.find(work=>work.id===workItemId),project=data.projects.find(candidate=>candidate.id===item?.projectId),actor=data.users.find(person=>person.id===actorId),note=text.trim();
     if(!item||!project||!actor||item.archived||!note||!(permissions.canManageWorkItem(actor,project)||permissions.canUpdateOwnWork(actor,item)))return data;

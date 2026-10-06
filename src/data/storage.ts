@@ -21,6 +21,7 @@ function migrate(input: Partial<AppData>): AppData {
   const data = {...structuredClone(seedData), ...input} as AppData;
   data.dailyReports ||= [];
   data.meetings ||= [];
+  data.meetingGroups ||= [];
   data.cycles ||= [];
   data.timeEntries ||= [];
   for (const project of data.projects) {
@@ -114,6 +115,10 @@ function migrate(input: Partial<AppData>): AppData {
       return repaired;
     });
     data.schemaVersion=6;
+  }
+  if((data.schemaVersion||0)<7){
+    data.meetingGroups||=[];
+    data.schemaVersion=7;
   }
   return data;
 }

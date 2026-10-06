@@ -179,6 +179,15 @@ export interface Meeting {
   notes: string;
   createdBy: string;
   createdAt: string;
+  type?: 'Client' | 'Internal' | 'Vendor' | 'Other';
+  groupId?: string;
+}
+
+export interface MeetingGroup {
+  id: string;
+  name: string;
+  createdBy: string;
+  createdAt: string;
 }
 
 export interface TimeEntry {
@@ -203,5 +212,6 @@ export interface AppData {
   timeEntries: TimeEntry[];
   dailyReports?: DailyReport[];
   meetings?: Meeting[];
+  meetingGroups: MeetingGroup[];
   schemaVersion?: number;
 }

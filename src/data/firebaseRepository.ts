@@ -24,6 +24,7 @@ const collections = {
   cycles: 'cycles',
   timeEntries: 'timeEntries',
   dailyReports: 'dailyReports',
+  meetingGroups: 'meetingGroups',
 } as const;
 
 type EntityKey = keyof typeof collections;
@@ -32,7 +33,7 @@ const instantFields = new Set(['createdAt','updatedAt','startedAt','completedAt'
 
 const emptyData = (): AppData => ({
   users: [], projects: [], workItems: [], updates: [], helpRequests: [], activities: [],
-  cycles: [], timeEntries: [], dailyReports: [], meetings: [], schemaVersion: 6,
+  cycles: [], timeEntries: [], dailyReports: [], meetings: [], meetingGroups: [], schemaVersion: 7,
 });
 
 const meetingCollection = (projectId: string | null) => projectId
@@ -171,7 +172,7 @@ export const firebaseRepository = {
   importLocal(currentCloud: AppData) {
     const legacy = localStore.load();
     const legacyUserIds = new Set(legacy.users.map(user => user.id));
-    const merged: AppData = {...legacy,meetings:legacy.meetings?.length ? legacy.meetings : currentCloud.meetings || [],users:[...legacy.users.map(user => {
+    const merged: AppData = {...legacy,meetings:legacy.meetings?.length ? legacy.meetings : currentCloud.meetings || [],meetingGroups:legacy.meetingGroups?.length ? legacy.meetingGroups : currentCloud.meetingGroups || [],users:[...legacy.users.map(user => {
       const cloud = currentCloud.users.find(candidate => candidate.id === user.id);
       return cloud ? {...user,email:cloud.email,authUid:cloud.authUid,active:cloud.active,loginEnabled:cloud.loginEnabled} : user;
     }), ...currentCloud.users.filter(user => !legacyUserIds.has(user.id))]};

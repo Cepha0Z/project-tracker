@@ -92,7 +92,8 @@ export const seedData: AppData = {
     {id:'t4',projectId:'casa',workItemId:'w14',userId:'rahul',cycleId:'casa-cycle-1',date:'2026-09-14T16:56:00',minutes:105,updateId:'u4'},
   ],
   dailyReports: [],
-  schemaVersion: 6,
+  meetingGroups: [],
+  schemaVersion: 7,
 };
 
 // Phase 4 intentionally uses one real project as the complete test environment.
@@ -128,3 +129,4 @@ seedData.helpRequests=[];
 seedData.activities=[];
 seedData.timeEntries=[];
 seedData.dailyReports=[];
+seedData.meetingGroups=[];

@@ -115,7 +115,7 @@ service cloud.firestore {
     function validMeetingData(meetingId, projectId) {
       let meeting = request.resource.data;
       return meeting.keys().hasAll(['id', 'date', 'title', 'projectId', 'attendeeIds', 'notes', 'createdBy', 'createdAt'])
-        && meeting.keys().hasOnly(['id', 'date', 'title', 'projectId', 'attendeeIds', 'notes', 'createdBy', 'createdAt'])
+        && meeting.keys().hasOnly(['id', 'date', 'title', 'projectId', 'attendeeIds', 'notes', 'createdBy', 'createdAt', 'type', 'groupId'])
         && meeting.id == meetingId
         && meeting.projectId == projectId
         && (meeting.createdBy == userId() || isAdmin())
@@ -124,7 +124,13 @@ service cloud.firestore {
         && meeting.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && meeting.title is string && meeting.title.size() > 0 && meeting.title.size() <= 160
         && meeting.notes is string && meeting.notes.size() <= 20000
-        && meeting.attendeeIds is list && meeting.attendeeIds.size() <= 100;
+        && meeting.attendeeIds is list && meeting.attendeeIds.size() <= 100
+        && (!meeting.keys().hasAny(['type']) || meeting.type in ['Client', 'Internal', 'Vendor', 'Other'])
+        && (!meeting.keys().hasAny(['groupId']) || (
+          projectId == null
+          && meeting.groupId is string
+          && exists(/databases/$(database)/documents/meetingGroups/$(meeting.groupId))
+        ));
     }
 
     function validMeetingUpdateData(meetingId, projectId) {
@@ -132,8 +138,18 @@ service cloud.firestore {
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'date', 'title', 'projectId', 'attendeeIds', 'notes'
+          'date', 'title', 'projectId', 'attendeeIds', 'notes', 'type', 'groupId'
         ]);
+    }
+
+    function validMeetingGroup(groupId) {
+      let group = request.resource.data;
+      return group.keys().hasAll(['id', 'name', 'createdBy', 'createdAt'])
+        && group.keys().hasOnly(['id', 'name', 'createdBy', 'createdAt'])
+        && group.id == groupId
+        && group.name is string && group.name.size() > 0 && group.name.size() <= 80
+        && group.createdBy == userId()
+        && group.createdAt is timestamp;
     }
 
     match /authProfiles/{uid} {
@@ -210,6 +226,20 @@ service cloud.firestore {
       allow update: if activeUser() && (resource.data.createdBy == userId() || isAdmin())
         && validMeetingUpdateData(meetingId, null);
       allow delete: if activeUser() && (resource.data.createdBy == userId() || isAdmin());
+    }
+
+    match /meetingGroups/{groupId} {
+      allow read: if activeUser();
+      allow create: if activeUser() && validMeetingGroup(groupId);
+      allow update: if isAdmin()
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']);
+      allow delete: if isAdmin();
     }
 
     match /workItems/{id} {

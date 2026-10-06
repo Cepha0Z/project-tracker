@@ -14,7 +14,7 @@ import { helpRequestService } from './services/helpRequestService';
 import { cycleService } from './services/cycleService';
 import type { AppData, Cycle, DecisionOutcome, HelpRequest, Priority, Project, User, WorkItem, WorkStatus } from './types';
 import { Avatar, Empty, formatTime, minutesLabel, Modal, Progress, SectionTitle, StatusPill } from './components/ui';
-import { CompactProjects, EmployeeWorkspace, IssueModal, NotificationCenter, OverviewProjectGroups, ProjectWorkspace, SimplePeople, SimpleReports } from './components/phase4';
+import { CompactProjects, EmployeeWorkspace, IssueModal, NotificationCenter, OverviewProjectGroups, ProjectWorkspace, SimplePeople, SimpleReports, WorkSpanControl, type WorkSpanMode } from './components/phase4';
 import { authService } from './firebase/authService';
 import { activeProjects, currentProjectStage, isProjectArchived, localDateKey, projectAttention, projectCardOrder, projectCardState, projectHealth, projectWorkItems, workItemAssigneeIds } from './domain/selectors';
 import { NotificationControl } from './components/NotificationControl';
@@ -98,10 +98,12 @@ function Login({externalError}:{externalError:string}){
 
 const projectLocations:Record<string,string>={'villa-60':'Bangalore',kgf:'Kolar',casa:'Bangalore'};
 function PrincipalOverview({data,openWorkItem}:{data:AppData;openWorkItem:(projectId:string,itemId:string,helpId?:string)=>void}){
+  const [spanMode,setSpanMode]=useState<WorkSpanMode>('14'),[customDays,setCustomDays]=useState(14);
+  const windowDays=spanMode==='custom'?customDays:Number(spanMode);
   const projects=activeProjects(data).sort((a,b)=>projectCardOrder[projectCardState(data,a)]-projectCardOrder[projectCardState(data,b)]);
   const work=data.workItems.filter(item=>!item.archived),attention=projects.filter(project=>projectCardState(data,project)==='red').length,delayed=projects.filter(project=>projectCardState(data,project)==='yellow').length;
   const onTrack=projects.filter(project=>projectHealth(data,project)==='On Track').length,completed=projects.filter(project=>projectHealth(data,project)==='Completed').length;
-  return <div className="page simple-page principal-overview"><div className="boss-overview-head"><div><h1>Studio Overview</h1><p>Projects at a glance.</p></div><div className="boss-metrics"><span className="needs"><b>{attention}</b><small>Need Attention</small></span><span className="delayed"><b>{delayed}</b><small>Delayed</small></span><span className="track"><b>{onTrack}</b><small>On Track</small></span><span className="completed"><b>{completed}</b><small>Completed</small></span></div></div><OverviewProjectGroups data={data} projects={projects} work={work} openWorkItem={openWorkItem}/></div>;
+  return <div className="page simple-page principal-overview"><div className="boss-overview-head"><div><h1>Studio Overview</h1><p>Projects at a glance.</p></div><div className="boss-metrics"><span className="needs"><b>{attention}</b><small>Need Attention</small></span><span className="delayed"><b>{delayed}</b><small>Delayed</small></span><span className="track"><b>{onTrack}</b><small>On Track</small></span><span className="completed"><b>{completed}</b><small>Completed</small></span></div></div><div className="work-section-heading principal-work-heading"><h2>Deliverables</h2><WorkSpanControl mode={spanMode} days={windowDays} customDays={customDays} onMode={setSpanMode} onCustomDays={setCustomDays}/></div><OverviewProjectGroups data={data} projects={projects} work={work} openWorkItem={openWorkItem} defaultCollapsed collapsedSummaryOnly windowDays={windowDays}/></div>;
 }
 function PrincipalHome({data,user,openProject,mutate}:{data:AppData;user:User;openProject:(id:string)=>void;mutate:Mutate}){
   const projects=data.projects,[expanded,setExpanded]=useState<string|null>(null),[selectedHelp,setSelectedHelp]=useState<HelpRequest|null>(null);

@@ -11,7 +11,7 @@ import { workItemService } from '../src/services/workItemService';
 import { updateService } from '../src/services/updateService';
 import { meetingService } from '../src/services/meetingService';
 import { permissions } from '../src/permissions/permissions';
-import { CompactProjects, EmployeeWorkspace, NewProject, OverviewProjectGroups, ReportModal, SimplePeople, SimpleProject, SimpleReports } from '../src/components/phase4';
+import { CompactProjects, EmployeeWorkspace, NewProject, OverviewProjectGroups, ReportModal, SimplePeople, SimpleProject, SimpleReports, WorkSpanControl } from '../src/components/phase4';
 import { MeetingsPage } from '../src/components/MeetingsPage';
 import type { AppData, WorkItem } from '../src/types';
 
@@ -110,6 +110,10 @@ const overviewHtml=renderToStaticMarkup(createElement(OverviewProjectGroups,{dat
 assert.ok(overviewHtml.includes('overview-yellow')&&overviewHtml.includes('item-yellow'),'delayed project and unfinished overdue work carry yellow card classes');
 assert.ok(!overviewHtml.includes('type="range"')&&!overviewHtml.includes('Start work')&&!overviewHtml.includes('Need help')&&!overviewHtml.includes('>Resolve<')&&!overviewHtml.includes('>Escalate<'),'Home project rows contain no work controls');
 assert.ok(overviewHtml.includes('aria-expanded="true"'),'Home project groups are expanded initially');
+const spanControlHtml=renderToStaticMarkup(createElement(WorkSpanControl,{mode:'14',days:14,customDays:14,onMode:()=>{},onCustomDays:()=>{}}));
+assert.ok(spanControlHtml.includes('1 Week')&&spanControlHtml.includes('2 Weeks')&&spanControlHtml.includes('Custom')&&spanControlHtml.includes('value="14" selected=""'),'work visibility defaults to 2 Weeks and offers 1 Week and Custom');
+const collapsedBossHtml=renderToStaticMarkup(createElement(OverviewProjectGroups,{data:base,projects:base.projects,work:base.workItems,openWorkItem:()=>{},defaultCollapsed:true,collapsedSummaryOnly:true}));
+assert.ok(collapsedBossHtml.includes('aria-expanded="false"')&&collapsedBossHtml.includes('Villa 60')&&collapsedBossHtml.includes('Delayed')&&!collapsedBossHtml.includes('Bangalore · Lead:'),'collapsed boss projects show only project name and status');
 const progressiveOverview=renderToStaticMarkup(createElement(OverviewProjectGroups,{data:stageFixture,projects:stageFixture.projects,work:stageFixture.workItems,openWorkItem:()=>{}}));
 assert.ok(progressiveOverview.includes('Kitchen Layout')&&progressiveOverview.includes('Concept package'),'overview uses the rolling due-date window across project sections');
 const advancedOverview=renderToStaticMarkup(createElement(OverviewProjectGroups,{data:briefDone,projects:briefDone.projects,work:briefDone.workItems,openWorkItem:()=>{}}));
@@ -418,6 +422,8 @@ const rollingItems:WorkItem[]=[
   {...rollingSeed,id:'completed-in-window',name:'Completed',dueDate:'2026-10-08',status:'Completed'},
 ];
 assert.deepEqual(rollingWorkItems([...rollingItems,rollingItems[1]],'2026-10-06').map(item=>item.id),['overdue-early-section','upcoming-later-section'],'rolling work is deduplicated, section-independent, overdue-first, and limited to 14 days');
+assert.deepEqual(rollingWorkItems(rollingItems,'2026-10-06',7).map(item=>item.id),['overdue-early-section','upcoming-later-section'],'one-week visibility keeps overdue work and includes work due within seven days');
+assert.deepEqual(rollingWorkItems(rollingItems,'2026-10-06',3).map(item=>item.id),['overdue-early-section'],'custom visibility keeps overdue work even when upcoming work is outside the selected span');
 
 const reportDeletionBase=fixture(),reportUpdate={...reportDeletionBase.updates[0],id:'owned-report-update',userId:'rahul',reportId:'owned-report'},ownNote={...reportDeletionBase.updates[0],id:'owned-note',userId:'rahul',reportId:undefined,kind:'note' as const};
 const reportDeletionData:AppData={...reportDeletionBase,updates:[reportUpdate,ownNote],dailyReports:[{id:'owned-report',userId:'rahul',date:'2026-10-06',summary:'Today',createdAt:'2026-10-06T12:00:00Z',updateIds:['owned-report-update']}],timeEntries:[{id:'report-time',projectId:'villa-60',workItemId:'assigned-work',userId:'rahul',date:'2026-10-06',minutes:30,updateId:'owned-report-update'}]};

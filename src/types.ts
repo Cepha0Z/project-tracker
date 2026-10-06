@@ -138,6 +138,9 @@ export interface Project {
   activeCycleId?: string;
   createdBy?: string;
   createdAt?: string;
+  archived?: boolean;
+  archivedAt?: string;
+  archivedBy?: string;
 }
 
 export interface Cycle {

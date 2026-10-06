@@ -173,9 +173,11 @@ service cloud.firestore {
       allow create: if activeUser() && (isAdmin() || (
         request.resource.data.createdBy == userId()
         && request.resource.data.teamIds.hasAny([userId()])
-      )) && request.resource.data.teamIds.hasAny([request.resource.data.leadId]);
+      )) && request.resource.data.teamIds.hasAny([request.resource.data.leadId])
+        && (!request.resource.data.keys().hasAny(['archived']) || request.resource.data.archived == false);
       allow update: if activeUser() && request.resource.data.teamIds.hasAny([request.resource.data.leadId])
-        && (canManageProject(id) || (
+        && ((canManageProject(id)
+          && (isAdmin() || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['archived', 'archivedAt', 'archivedBy']))) || (
           isProjectMember(id)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stages', 'currentStage'])
           && request.resource.data.stages is list

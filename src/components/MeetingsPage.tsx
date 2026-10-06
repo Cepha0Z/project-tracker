@@ -50,7 +50,7 @@ function NewMeeting({data, user, mutate, close}: {data: AppData; user: User; mut
   const [attendeeIds, setAttendeeIds] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
-  const projects = data.projects.filter(project => permissions.canViewProject(user, project));
+  const projects = data.projects.filter(project => !project.archived && permissions.canViewProject(user, project));
   const people = connectedPeople(data);
   function submit(event: FormEvent) {
     event.preventDefault();

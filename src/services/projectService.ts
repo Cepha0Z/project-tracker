@@ -36,6 +36,19 @@ export function projectDeletionImpact(data:AppData,projectId:string){
 }
 
 export const projectService = {
+  archiveProject(data:AppData, actorId:string, projectId:string):AppData {
+    const actor=data.users.find(user=>user.id===actorId),project=data.projects.find(entry=>entry.id===projectId);
+    if(!actor||!project||project.archived||!permissions.canArchiveProject(actor))return data;
+    const stamped=now();
+    const next={...data,projects:data.projects.map(entry=>entry.id===projectId?{...entry,archived:true,archivedAt:stamped,archivedBy:actorId}:entry)};
+    return withActivity(next,projectId,actorId,`archived project ${project.name}`);
+  },
+  unarchiveProject(data:AppData, actorId:string, projectId:string):AppData {
+    const actor=data.users.find(user=>user.id===actorId),project=data.projects.find(entry=>entry.id===projectId);
+    if(!actor||!project||!project.archived||!permissions.canArchiveProject(actor))return data;
+    const next={...data,projects:data.projects.map(entry=>entry.id===projectId?{...entry,archived:false,archivedAt:undefined,archivedBy:undefined}:entry)};
+    return withActivity(next,projectId,actorId,`unarchived project ${project.name}`);
+  },
   deleteProject(data:AppData, actorId:string, projectId:string):AppData {
     const actor=data.users.find(user=>user.id===actorId);
     if(!actor||!permissions.canDeleteProject(actor)||!data.projects.some(project=>project.id===projectId)
@@ -64,7 +77,9 @@ export const projectService = {
   },
   update(data:AppData, actorId:string, projectId:string, changes:Partial<Project>):AppData {
     const before=data.projects.find(p=>p.id===projectId)!; const updated={...before,...changes};
-    const actor=data.users.find(u=>u.id===actorId); if(!actor||!permissions.canManageProject(actor,before)) return data;
+    const actor=data.users.find(u=>u.id===actorId);
+    const changesArchiveState=['archived','archivedAt','archivedBy'].some(key=>Object.prototype.hasOwnProperty.call(changes,key));
+    if(!actor||before.archived||!permissions.canManageProject(actor,before)||(changesArchiveState&&!permissions.canArchiveProject(actor))) return data;
     const next={...data,projects:data.projects.map(p=>p.id===projectId?updated:p)};
     return withActivity(next,projectId,actorId,`updated project information`);
   },

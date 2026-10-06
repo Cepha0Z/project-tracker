@@ -131,7 +131,7 @@ export const firebaseRepository = {
       onData(structuredClone(current));
     };
     const syncProjectListeners = () => {
-      const visibleIds = new Set(current.projects.filter(project => permissions.canViewProject(user, project)).map(project => project.id));
+      const visibleIds = new Set(current.projects.filter(project => !project.archived && permissions.canViewProject(user, project)).map(project => project.id));
       for (const [id, stop] of projectStops) if (!visibleIds.has(id)) {
         stop(); projectStops.delete(id); projectMeetings.delete(id);
       }

@@ -16,6 +16,14 @@ export function workItemAssigneeIds(item: WorkItem) {
   return item.assigneeIds?.length ? item.assigneeIds : [item.assigneeId];
 }
 
+export function isProjectArchived(project: Project) {
+  return project.archived === true;
+}
+
+export function activeProjects(data: AppData) {
+  return data.projects.filter(project => !isProjectArchived(project));
+}
+
 export function projectWorkItems(data: AppData, projectId: string) {
   return data.workItems.filter(item => item.projectId === projectId && !item.archived);
 }
@@ -28,7 +36,8 @@ export function orderedWorkItems(data: AppData, items: WorkItem[]) {
 }
 
 export function employeeWorkItems(data: AppData, userId: string) {
-  return data.workItems.filter(item => !item.archived && workItemAssigneeIds(item).includes(userId));
+  const activeProjectIds = new Set(activeProjects(data).map(project => project.id));
+  return data.workItems.filter(item => activeProjectIds.has(item.projectId) && !item.archived && workItemAssigneeIds(item).includes(userId));
 }
 
 export function employeeActiveWork(data: AppData, userId: string) {

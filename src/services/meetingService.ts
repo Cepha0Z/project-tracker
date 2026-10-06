@@ -16,9 +16,9 @@ export const meetingService = {
     const user = data.users.find(person => person.id === userId);
     if (!user) return [];
     return (data.meetings || []).filter(meeting => {
-      if (user.access === 'admin' || meeting.projectId === null) return true;
+      if (meeting.projectId === null) return true;
       const project = data.projects.find(entry => entry.id === meeting.projectId);
-      return Boolean(project && permissions.canViewProject(user, project));
+      return Boolean(project && !project.archived && permissions.canViewProject(user, project));
     }).sort((left, right) => right.date.localeCompare(left.date) || right.createdAt.localeCompare(left.createdAt));
   },
   create(data: AppData, actorId: string, input: MeetingInput): AppData {
@@ -32,7 +32,7 @@ export const meetingService = {
     const validDate = /^\d{4}-\d{2}-\d{2}$/.test(input.date)
       && Number.isFinite(parsedDate) && new Date(parsedDate).toISOString().slice(0, 10) === input.date;
     if (!actor || !validDate || !title || title.length > 160 || notes.length > 20000
-      || (input.projectId !== null && (!project || !permissions.canViewProject(actor, project)))
+      || (input.projectId !== null && (!project || project.archived || !permissions.canViewProject(actor, project)))
       || attendees.length > 100 || attendees.some(id => !linkedIds.has(id))) return data;
     const meeting: Meeting = {
       id: makeId('meeting'), date: input.date, title, projectId: input.projectId,

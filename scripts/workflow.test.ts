@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { seedData } from '../src/data/seed';
 import { connectedPeople, displayActivityText, displayNameFromEmail, enabledAccountFlag, jobRole, presentUser } from '../src/domain/people';
-import { PROJECT_STAGE_ORDER, currentProjectStage, employeeActiveWork, employeeWorkItems, projectCardOrder, projectCardState, projectHealth, rollingWorkItems, workItemDaysBehind } from '../src/domain/selectors';
+import { PROJECT_STAGE_ORDER, currentProjectStage, employeeActiveWork, employeeWorkItems, localDateKey, projectCardOrder, projectCardState, projectHealth, rollingWorkItems, workItemDaysBehind } from '../src/domain/selectors';
 import { notificationChanges } from '../src/services/notificationEvents';
 import { helpRequestService } from '../src/services/helpRequestService';
 import { MAX_PROJECT_DELETION_OPERATIONS, projectDeletionImpact, projectService } from '../src/services/projectService';
@@ -73,6 +73,9 @@ assert.equal(editedMeeting.meetings?.find(meeting=>meeting.id===kitchenMeeting.i
 assert.equal(meetingService.update(projectMeeting,'sudiksha',kitchenMeeting.id,{date:'2026-09-19',title:'Unauthorized',projectId:'villa-60',attendeeIds:[],notes:''}),projectMeeting,'another employee cannot edit a meeting they did not create');
 assert.equal(meetingService.delete(projectMeeting,'sudiksha',kitchenMeeting.id),projectMeeting,'another employee cannot delete a meeting they did not create');
 assert.equal(meetingService.delete(projectMeeting,'rahul',kitchenMeeting.id).meetings?.some(meeting=>meeting.id===kitchenMeeting.id),false,'meeting creator can delete their meeting');
+const studioMeeting=projectMeeting.meetings!.find(meeting=>meeting.title==='Studio coordination')!;
+assert.equal(meetingService.delete(projectMeeting,'rahul',studioMeeting.id).meetings?.some(meeting=>meeting.id===studioMeeting.id),false,'meeting creator can delete a General / No Project meeting');
+assert.equal(meetingService.delete(projectMeeting,'manoj',studioMeeting.id).meetings?.some(meeting=>meeting.id===studioMeeting.id),false,'admin can delete a General / No Project meeting');
 const customGroupData=meetingService.createGroup(projectMeeting,'rahul','Vendors'),customGroup=customGroupData.meetingGroups[0];
 assert.equal(customGroup.name,'Vendors','employees can create a reusable custom meeting category');
 assert.equal(meetingService.createGroup(customGroupData,'rahul',' vendors '),customGroupData,'custom category names cannot be duplicated');
@@ -439,7 +442,8 @@ assert.deepEqual(rollingWorkItems(rollingItems,'2026-10-06',7).map(item=>item.id
 assert.deepEqual(rollingWorkItems(rollingItems,'2026-10-06',3).map(item=>item.id),['overdue-early-section'],'custom visibility keeps overdue work even when upcoming work is outside the selected span');
 
 const reportDeletionBase=fixture(),reportUpdate={...reportDeletionBase.updates[0],id:'owned-report-update',userId:'rahul',reportId:'owned-report'},ownNote={...reportDeletionBase.updates[0],id:'owned-note',userId:'rahul',reportId:undefined,kind:'note' as const};
-const reportDeletionData:AppData={...reportDeletionBase,updates:[reportUpdate,ownNote],dailyReports:[{id:'owned-report',userId:'rahul',date:'2026-10-06',summary:'Today',createdAt:'2026-10-06T12:00:00Z',updateIds:['owned-report-update']}],timeEntries:[{id:'report-time',projectId:'villa-60',workItemId:'assigned-work',userId:'rahul',date:'2026-10-06',minutes:30,updateId:'owned-report-update'}]};
+const reportDeletionDay=localDateKey();
+const reportDeletionData:AppData={...reportDeletionBase,updates:[reportUpdate,ownNote],dailyReports:[{id:'owned-report',userId:'rahul',date:reportDeletionDay,summary:'Today',createdAt:`${reportDeletionDay}T12:00:00Z`,updateIds:['owned-report-update']}],timeEntries:[{id:'report-time',projectId:'villa-60',workItemId:'assigned-work',userId:'rahul',date:reportDeletionDay,minutes:30,updateId:'owned-report-update'}]};
 assert.equal(updateService.deleteReport(reportDeletionData,'sudiksha','owned-report'),reportDeletionData,'employees cannot delete another employee report');
 const deletedReport=updateService.deleteReport(reportDeletionData,'rahul','owned-report');
 assert.equal(deletedReport.dailyReports?.length,0,'report author can delete their report');

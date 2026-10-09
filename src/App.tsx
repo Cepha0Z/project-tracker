@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import {
   AlertCircle, ArrowLeft, ArrowRight, BarChart3, Bell, BookOpen, BriefcaseBusiness,
   Building2, CalendarDays, Check, CircleHelp, Clock3, Edit3, FolderKanban,
-  Home, LayoutList, LogOut, Menu, MessageSquareText, Plus, Search, Send, Trash2, Users, X,
+  Home, LayoutList, LogOut, Menu, MessageSquareText, Moon, Plus, Search, Send, Sun, Trash2, Users, X,
 } from 'lucide-react';
 import { repository } from './data/repository';
 import { permissions } from './permissions/permissions';
@@ -24,7 +24,13 @@ import { displayActivityText, jobRole } from './domain/people';
 import { MeetingsPage } from './components/MeetingsPage';
 
 type Page='home'|'projects'|'project'|'work'|'people'|'meetings'|'reports'|'notifications';
+type Theme='light'|'dark';
 type Mutate=(fn:(data:AppData)=>AppData)=>void;
+const THEME_KEY='studio-project-tracker-theme';
+function initialTheme():Theme {
+  const saved=window.localStorage.getItem(THEME_KEY);
+  return saved==='dark'||saved==='light'?saved:window.matchMedia?.('(prefers-color-scheme: dark)').matches?'dark':'light';
+}
 const today=localDateKey;
 const assigneeIds=workItemAssigneeIds;
 const cycleItems=(data:AppData,cycle?:Cycle)=>cycle?data.workItems.filter(w=>!w.archived&&(cycle.deliverableIds?.includes(w.id)||(!cycle.deliverableIds&&w.cycleId===cycle.id))):[];
@@ -36,6 +42,7 @@ const projectProgress=(data:AppData,p:Project)=>{const items=activeItems(data,p)
 
 export default function App(){
   const initialTarget=new URLSearchParams(window.location.search);
+  const [theme,setTheme]=useState<Theme>(initialTheme);
   const [data,setData]=useState<AppData>(()=>repository.load());
   const [sessionUser,setSessionUser]=useState<User|null>(null);
   const [authReady,setAuthReady]=useState(false),[dataReady,setDataReady]=useState(false),[syncError,setSyncError]=useState('');
@@ -48,6 +55,7 @@ export default function App(){
   const [targetUpdateId,setTargetUpdateId]=useState<string|undefined>(()=>initialTarget.get('update')||undefined);
   const [foregroundNotification,setForegroundNotification]=useState<ForegroundNotification|null>(null);
   const [menuOpen,setMenuOpen]=useState(false);
+  useEffect(()=>{document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme;window.localStorage.setItem(THEME_KEY,theme)},[theme]);
   useEffect(()=>{let stopData:()=>void=()=>undefined;const stopAuth=authService.subscribe(profile=>{stopData();setSessionUser(profile);setAuthReady(true);setSyncError('');if(profile){setDataReady(false);stopData=repository.subscribe(profile,next=>{setData(next);setDataReady(true)},error=>{setSyncError(error.message);setDataReady(true)})}else setDataReady(false)},message=>{setSyncError(message);setAuthReady(true)});return()=>{stopData();stopAuth()}},[]);
   useEffect(()=>{let stop:()=>void=()=>undefined;notificationService.subscribeForeground(setForegroundNotification).then(unsubscribe=>{stop=unsubscribe});return()=>stop()},[]);
   const storedUser=data.users.find(u=>u.id===sessionUser?.id);
@@ -69,7 +77,7 @@ export default function App(){
       <div className="brand"><span className="brand-mark"><Building2 size={20}/></span><div><strong>STUDIO</strong><small>PROJECTS</small></div></div>
       <button className="mobile-close" onClick={()=>setMenuOpen(false)} aria-label="Close menu"><X/></button>
       <nav>{nav.map(([key,label,Icon])=><button key={String(key)} className={page===key||(key==='projects'&&page==='project')?'active':''} onClick={()=>navigate(key as Page)}><Icon size={19}/><span>{String(label)}</span></button>)}</nav>
-      <div className="sidebar-foot"><NotificationControl user={user}/><div className="profile-switch"><Avatar user={user} size="sm"/><span><strong>{user.name.split(' ')[0]}</strong><small>{jobRole(user)}</small></span></div><button className="logout" onClick={async()=>{await notificationService.disable();await authService.signOut()}}><LogOut size={17}/> Sign out</button></div>
+      <div className="sidebar-foot"><NotificationControl user={user}/><button type="button" className="theme-toggle" aria-label={`Switch to ${theme==='dark'?'light':'dark'} mode`} aria-pressed={theme==='dark'} onClick={()=>setTheme(current=>current==='dark'?'light':'dark')}>{theme==='dark'?<Moon size={16}/>:<Sun size={16}/>}<span>{theme==='dark'?'Dark mode':'Light mode'}</span><i aria-hidden="true"><i/></i></button><div className="profile-switch"><Avatar user={user} size="sm"/><span><strong>{user.name.split(' ')[0]}</strong><small>{jobRole(user)}</small></span></div><button className="logout" onClick={async()=>{await notificationService.disable();await authService.signOut()}}><LogOut size={17}/> Sign out</button></div>
     </aside>
     <div className="main-shell">
       <header className={`topbar ${isPrincipal&&page==='home'?'boss-topbar':''}`}><button className="menu-button" onClick={()=>setMenuOpen(true)} aria-label="Open menu"><Menu/></button>{isPrincipal&&page==='home'?<div className="boss-date">{new Date().toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div>:<div className="crumb"><span>Studio Projects</span><b>/</b><strong>{page==='project'?data.projects.find(p=>p.id===projectId)?.name:page==='notifications'?'Notifications':String(nav.find(n=>n[0]===page)?.[1]??'')}</strong></div>}<div className="top-actions">{!(isPrincipal&&page==='home')&&<button className="icon-button" onClick={()=>navigate('projects')} aria-label="Search projects"><Search size={18}/></button>}<button className="icon-button notification" onClick={()=>navigate('notifications')} aria-label="Open notifications"><Bell size={20}/>{data.helpRequests.some(h=>!data.projects.find(project=>project.id===h.projectId)?.archived&&(isPrincipal||h.raisedBy===user.id)&&h.status!=='Resolved')&&<span/>}</button><Avatar user={user}/>{isPrincipal&&page==='home'&&<span className="boss-user"><strong>{user.name.split(' ')[0]}</strong><small>Principal</small></span>}</div></header>

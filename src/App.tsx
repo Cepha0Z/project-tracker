@@ -14,7 +14,7 @@ import { helpRequestService } from './services/helpRequestService';
 import { cycleService } from './services/cycleService';
 import type { AppData, Cycle, DecisionOutcome, HelpRequest, Priority, Project, User, WorkItem, WorkStatus } from './types';
 import { Avatar, Empty, formatTime, minutesLabel, Modal, Progress, SectionTitle, StatusPill } from './components/ui';
-import { CompactProjects, EmployeeWorkspace, IssueModal, NotificationCenter, OverviewProjectGroups, ProjectWorkspace, SimplePeople, SimpleReports, WorkSpanControl, type WorkSpanMode } from './components/phase4';
+import { CompactProjects, EmployeeWorkspace, IssueModal, NotificationCenter, OverviewProjectGroups, ProjectWorkspace, SimplePeople, SimpleReports, WorkSpanControl, useWorkSpanPreference } from './components/phase4';
 import { authService } from './firebase/authService';
 import { activeProjects, currentProjectStage, isProjectArchived, localDateKey, projectAttention, projectCardOrder, projectCardState, projectHealth, projectWorkItems, workItemAssigneeIds } from './domain/selectors';
 import { NotificationControl } from './components/NotificationControl';
@@ -106,8 +106,7 @@ function Login({externalError}:{externalError:string}){
 
 const projectLocations:Record<string,string>={'villa-60':'Bangalore',kgf:'Kolar',casa:'Bangalore'};
 function PrincipalOverview({data,openWorkItem}:{data:AppData;openWorkItem:(projectId:string,itemId:string,helpId?:string)=>void}){
-  const [spanMode,setSpanMode]=useState<WorkSpanMode>('14'),[customDays,setCustomDays]=useState(14);
-  const windowDays=spanMode==='custom'?customDays:Number(spanMode);
+  const {spanMode,setSpanMode,customDays,setCustomDays,windowDays}=useWorkSpanPreference();
   const projects=activeProjects(data).sort((a,b)=>projectCardOrder[projectCardState(data,a)]-projectCardOrder[projectCardState(data,b)]);
   const work=data.workItems.filter(item=>!item.archived),attention=projects.filter(project=>projectCardState(data,project)==='red').length,delayed=projects.filter(project=>projectCardState(data,project)==='yellow').length;
   const onTrack=projects.filter(project=>projectHealth(data,project)==='On Track').length,completed=projects.filter(project=>projectHealth(data,project)==='Completed').length;

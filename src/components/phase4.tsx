@@ -27,6 +27,25 @@ const elapsed=(item:WorkItem)=>{let value=item.activeElapsedMinutes||0;if(item.s
 const statusFor=projectHealth;
 const projectPriority=(data:AppData,project:Project)=>projectCardOrder[projectCardState(data,project)];
 export type WorkSpanMode='7'|'14'|'custom';
+const WORK_SPAN_STORAGE_KEY='studio-project-tracker-work-span';
+const defaultWorkSpan={mode:'14' as WorkSpanMode,customDays:14};
+function initialWorkSpan(){
+  if(typeof window==='undefined')return defaultWorkSpan;
+  try{
+    const saved=JSON.parse(window.localStorage.getItem(WORK_SPAN_STORAGE_KEY)||'null') as {mode?:unknown;customDays?:unknown}|null;
+    const mode=saved?.mode==='7'||saved?.mode==='14'||saved?.mode==='custom'?saved.mode:defaultWorkSpan.mode;
+    const parsedDays=Number(saved?.customDays);
+    const customDays=Number.isFinite(parsedDays)?Math.max(1,Math.min(365,Math.round(parsedDays))):defaultWorkSpan.customDays;
+    return {mode,customDays};
+  }catch{return defaultWorkSpan}
+}
+export function useWorkSpanPreference(){
+  const [preference,setPreference]=useState(initialWorkSpan),{mode:spanMode,customDays}=preference;
+  const setSpanMode=(mode:WorkSpanMode)=>setPreference(current=>({...current,mode}));
+  const setCustomDays=(days:number)=>setPreference(current=>({...current,customDays:days}));
+  useEffect(()=>{try{window.localStorage.setItem(WORK_SPAN_STORAGE_KEY,JSON.stringify(preference))}catch{/* Keep the control usable when browser storage is unavailable. */}},[preference]);
+  return {spanMode,setSpanMode,customDays,setCustomDays,windowDays:spanMode==='custom'?customDays:Number(spanMode)};
+}
 export function WorkSpanControl({mode,days,customDays,onMode,onCustomDays}:{mode:WorkSpanMode;days:number;customDays:number;onMode:(mode:WorkSpanMode)=>void;onCustomDays:(days:number)=>void}){
   return <div className="work-span-control" aria-label="Deliverable time span"><label><span>SHOW</span><select aria-label="Deliverable time span" value={mode} onChange={event=>onMode(event.target.value as WorkSpanMode)}><option value="7">1 Week</option><option value="14">2 Weeks</option><option value="custom">Custom</option></select></label>{mode==='custom'&&<label className="custom-span-days"><input aria-label="Custom number of days" type="number" inputMode="numeric" min="1" max="365" value={customDays} onChange={event=>onCustomDays(Math.max(1,Math.min(365,Number(event.target.value)||1)))}/><span>DAYS</span></label>}<small>Showing {days===7?'1 week':days===14?'2 weeks':`${days} days`}</small></div>;
 }
@@ -48,8 +67,7 @@ export function NewProject({data,user,mutate,close}:{data:AppData;user:User;muta
 
 
 export function EmployeeWorkspace({data,user,openWorkItem,mutate,showAll=false}:{data:AppData;user:User;openWorkItem:(projectId:string,itemId:string,helpId?:string)=>void;mutate:Mutate;showAll?:boolean}){
-  const [spanMode,setSpanMode]=useState<WorkSpanMode>('14'),[customDays,setCustomDays]=useState(14);
-  const windowDays=spanMode==='custom'?customDays:Number(spanMode);
+  const {spanMode,setSpanMode,customDays,setCustomDays,windowDays}=useWorkSpanPreference();
   const projects=activeProjects(data).sort((a,b)=>projectPriority(data,a)-projectPriority(data,b));
   const allAssigned=employeeWorkItems(data,user.id);
   const assigned=rollingWorkItems(allAssigned,today(),windowDays);

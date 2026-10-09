@@ -4,6 +4,8 @@ import {
   deleteField,
   doc,
   onSnapshot,
+  query,
+  where,
   writeBatch,
   type DocumentData,
   type Unsubscribe,
@@ -23,17 +25,18 @@ const collections = {
   activities: 'activity',
   cycles: 'cycles',
   timeEntries: 'timeEntries',
+  attendanceEntries: 'attendanceEntries',
   dailyReports: 'dailyReports',
   meetingGroups: 'meetingGroups',
 } as const;
 
 type EntityKey = keyof typeof collections;
 type Entity = AppData[EntityKey] extends Array<infer T> ? T : never;
-const instantFields = new Set(['createdAt','updatedAt','startedAt','completedAt','closedAt','escalatedAt','respondedAt','decidedAt','resolvedAt']);
+const instantFields = new Set(['createdAt','updatedAt','startedAt','completedAt','closedAt','escalatedAt','respondedAt','decidedAt','resolvedAt','clockInAt','clockOutAt']);
 
 const emptyData = (): AppData => ({
   users: [], projects: [], workItems: [], updates: [], helpRequests: [], activities: [],
-  cycles: [], timeEntries: [], dailyReports: [], meetings: [], meetingGroups: [], schemaVersion: 7,
+  cycles: [], timeEntries: [], attendanceEntries: [], dailyReports: [], meetings: [], meetingGroups: [], schemaVersion: 8,
 });
 
 const meetingCollection = (projectId: string | null) => projectId
@@ -149,7 +152,9 @@ export const firebaseRepository = {
       publish();
     }, error => onError(error));
     const stops = (Object.entries(collections) as [EntityKey,string][]).map(([key, collectionName]) => onSnapshot(
-      collection(firestoreDb!, collectionName),
+      key==='attendanceEntries'&&!permissions.isPrincipal(user)
+        ? query(collection(firestoreDb!,collectionName),where('userId','==',user.id))
+        : collection(firestoreDb!, collectionName),
       snapshot => {
         (current[key] as Entity[]) = snapshot.docs.map(snapshotDoc => {
           const value = decode(snapshotDoc.data()) as Record<string,unknown>;

@@ -484,5 +484,25 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if activeUser() && (resource.data.userId == userId() || isAdmin());
     }
+
+    match /attendanceEntries/{id} {
+      allow read: if activeUser() && (resource.data.userId == userId() || isAdmin());
+      allow create: if activeUser()
+        && request.resource.data.keys().hasAll(['id', 'userId', 'clockInAt'])
+        && request.resource.data.keys().hasOnly(['id', 'userId', 'clockInAt'])
+        && request.resource.data.id == id
+        && request.resource.data.userId == userId()
+        && request.resource.data.clockInAt is timestamp;
+      allow update: if activeUser()
+        && resource.data.userId == userId()
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.clockInAt == resource.data.clockInAt
+        && !resource.data.keys().hasAny(['clockOutAt'])
+        && request.resource.data.clockOutAt is timestamp
+        && request.resource.data.clockOutAt >= resource.data.clockInAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clockOutAt']);
+      allow delete: if false;
+    }
   }
 }

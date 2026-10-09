@@ -91,9 +91,10 @@ export const seedData: AppData = {
     {id:'t3',projectId:'kgf',workItemId:'w10',userId:'siddharth',cycleId:'kgf-cycle-1',date:'2026-09-14T17:18:00',minutes:135,updateId:'u3'},
     {id:'t4',projectId:'casa',workItemId:'w14',userId:'rahul',cycleId:'casa-cycle-1',date:'2026-09-14T16:56:00',minutes:105,updateId:'u4'},
   ],
+  attendanceEntries: [],
   dailyReports: [],
   meetingGroups: [],
-  schemaVersion: 7,
+  schemaVersion: 8,
 };
 
 // Phase 4 intentionally uses one real project as the complete test environment.

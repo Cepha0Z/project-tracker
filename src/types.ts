@@ -201,6 +201,13 @@ export interface TimeEntry {
   updateId?: string;
 }
 
+export interface AttendanceEntry {
+  id: string;
+  userId: string;
+  clockInAt: string;
+  clockOutAt?: string;
+}
+
 export interface AppData {
   users: User[];
   projects: Project[];
@@ -210,6 +217,7 @@ export interface AppData {
   activities: Activity[];
   cycles: Cycle[];
   timeEntries: TimeEntry[];
+  attendanceEntries: AttendanceEntry[];
   dailyReports?: DailyReport[];
   meetings?: Meeting[];
   meetingGroups: MeetingGroup[];

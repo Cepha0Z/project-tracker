@@ -24,6 +24,7 @@ function migrate(input: Partial<AppData>): AppData {
   data.meetingGroups ||= [];
   data.cycles ||= [];
   data.timeEntries ||= [];
+  data.attendanceEntries ||= [];
   for (const project of data.projects) {
     let cycle = data.cycles.find(c=>c.id===project.activeCycleId) || data.cycles.find(c=>c.projectId===project.id&&c.status==='Active');
     if (!cycle) {
@@ -119,6 +120,10 @@ function migrate(input: Partial<AppData>): AppData {
   if((data.schemaVersion||0)<7){
     data.meetingGroups||=[];
     data.schemaVersion=7;
+  }
+  if((data.schemaVersion||0)<8){
+    data.attendanceEntries||=[];
+    data.schemaVersion=8;
   }
   return data;
 }

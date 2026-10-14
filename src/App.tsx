@@ -22,9 +22,9 @@ import { notificationService, type ForegroundNotification } from './services/not
 import { helpNotificationService } from './services/helpNotificationService';
 import { displayActivityText, jobRole } from './domain/people';
 import { MeetingsPage } from './components/MeetingsPage';
-import { AttendanceControl } from './components/AttendanceControl';
+import { AttendancePage } from './components/AttendancePage';
 
-type Page='home'|'projects'|'project'|'work'|'people'|'meetings'|'reports'|'notifications';
+type Page='home'|'projects'|'project'|'work'|'people'|'meetings'|'reports'|'attendance'|'notifications';
 type Theme='light'|'dark';
 type Mutate=(fn:(data:AppData)=>AppData)=>void;
 const THEME_KEY='studio-project-tracker-theme';
@@ -72,13 +72,13 @@ export default function App(){
   if(!user)return <Login externalError={syncError}/>;
   if(!dataReady)return <div className="firebase-loading"><span/><strong>Loading your workspace…</strong></div>;
   const isPrincipal=permissions.isPrincipal(user);
-  const nav=isPrincipal?[['home','Home',Home],['projects','Projects',FolderKanban],['people','People',Users],['meetings','Meetings',CalendarDays],['reports','Reports',BarChart3]]:[['home','Home',Home],['projects','Projects',FolderKanban],['work','My Work',LayoutList],['people','People',Users],['meetings','Meetings',CalendarDays],['reports','Reports',BarChart3]];
+  const nav=isPrincipal?[['home','Home',Home],['projects','Projects',FolderKanban],['people','People',Users],['attendance','Attendance',Clock3],['meetings','Meetings',CalendarDays],['reports','Reports',BarChart3]]:[['home','Home',Home],['projects','Projects',FolderKanban],['work','My Work',LayoutList],['people','People',Users],['meetings','Meetings',CalendarDays],['reports','Reports',BarChart3]];
   return <div className="app-shell">
     <aside className={`sidebar ${menuOpen?'open':''}`}>
       <div className="brand"><span className="brand-mark"><Building2 size={20}/></span><div><strong>STUDIO</strong><small>PROJECTS</small></div></div>
       <button className="mobile-close" onClick={()=>setMenuOpen(false)} aria-label="Close menu"><X/></button>
       <nav>{nav.map(([key,label,Icon])=><button key={String(key)} className={page===key||(key==='projects'&&page==='project')?'active':''} onClick={()=>navigate(key as Page)}><Icon size={19}/><span>{String(label)}</span></button>)}</nav>
-      <div className="sidebar-foot"><AttendanceControl data={data} user={user} mutate={mutate}/><NotificationControl user={user}/><button type="button" className="theme-toggle" aria-label={`Switch to ${theme==='dark'?'light':'dark'} mode`} aria-pressed={theme==='dark'} onClick={()=>setTheme(current=>current==='dark'?'light':'dark')}>{theme==='dark'?<Moon size={16}/>:<Sun size={16}/>}<span>{theme==='dark'?'Dark mode':'Light mode'}</span><i aria-hidden="true"><i/></i></button><div className="profile-switch"><Avatar user={user} size="sm"/><span><strong>{user.name.split(' ')[0]}</strong><small>{jobRole(user)}</small></span></div><button className="logout" onClick={async()=>{await notificationService.disable();await authService.signOut()}}><LogOut size={17}/> Sign out</button></div>
+      <div className="sidebar-foot"><NotificationControl user={user}/><button type="button" className="theme-toggle" aria-label={`Switch to ${theme==='dark'?'light':'dark'} mode`} aria-pressed={theme==='dark'} onClick={()=>setTheme(current=>current==='dark'?'light':'dark')}>{theme==='dark'?<Moon size={16}/>:<Sun size={16}/>}<span>{theme==='dark'?'Dark mode':'Light mode'}</span><i aria-hidden="true"><i/></i></button><div className="profile-switch"><Avatar user={user} size="sm"/><span><strong>{user.name.split(' ')[0]}</strong><small>{jobRole(user)}</small></span></div><button className="logout" onClick={async()=>{await notificationService.disable();await authService.signOut()}}><LogOut size={17}/> Sign out</button></div>
     </aside>
     <div className="main-shell">
       <header className={`topbar ${isPrincipal&&page==='home'?'boss-topbar':''}`}><button className="menu-button" onClick={()=>setMenuOpen(true)} aria-label="Open menu"><Menu/></button>{isPrincipal&&page==='home'?<div className="boss-date">{new Date().toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div>:<div className="crumb"><span>Studio Projects</span><b>/</b><strong>{page==='project'?data.projects.find(p=>p.id===projectId)?.name:page==='notifications'?'Notifications':String(nav.find(n=>n[0]===page)?.[1]??'')}</strong></div>}<div className="top-actions">{!(isPrincipal&&page==='home')&&<button className="icon-button" onClick={()=>navigate('projects')} aria-label="Search projects"><Search size={18}/></button>}<button className="icon-button notification" onClick={()=>navigate('notifications')} aria-label="Open notifications"><Bell size={20}/>{data.helpRequests.some(h=>!data.projects.find(project=>project.id===h.projectId)?.archived&&(isPrincipal||h.raisedBy===user.id)&&h.status!=='Resolved')&&<span/>}</button><Avatar user={user}/>{isPrincipal&&page==='home'&&<span className="boss-user"><strong>{user.name.split(' ')[0]}</strong><small>Principal</small></span>}</div></header>
@@ -91,6 +91,7 @@ export default function App(){
         {page==='project'&&(()=>{const selected=data.projects.find(project=>project.id===projectId);return selected&&(!isProjectArchived(selected)||permissions.canArchiveProject(user))?<ProjectWorkspace data={data} user={user} projectId={projectId} initialWorkItemId={targetWorkItemId} initialHelpId={targetHelpId} openDetailOnEntry={openDetailOnEntry} back={()=>navigate('projects')} mutate={mutate}/>:<div className="page simple-page"><button className="secondary" onClick={()=>navigate('projects')}>Back to Projects</button><Empty>Project is unavailable.</Empty></div>})()}
         {page==='work'&&<EmployeeWorkspace data={data} user={user} openWorkItem={openOverviewItem} mutate={mutate} showAll/>}
         {page==='people'&&<SimplePeople data={data} user={user} mutate={mutate}/>} 
+        {page==='attendance'&&isPrincipal&&<AttendancePage data={data} user={user}/>}
         {page==='meetings'&&<MeetingsPage data={data} user={user} mutate={mutate}/>}
         {page==='reports'&&<SimpleReports data={data} user={user} mutate={mutate} focusReportId={targetReportId} focusUpdateId={targetUpdateId}/>}
         {page==='notifications'&&<NotificationCenter data={data} user={user} openHelp={openWorkItem} openReport={openReport}/>}</>

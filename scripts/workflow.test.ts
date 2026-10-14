@@ -15,6 +15,7 @@ import { permissions } from '../src/permissions/permissions';
 import { CompactProjects, EmployeeWorkspace, NewProject, OverviewProjectGroups, ReportModal, SimplePeople, SimpleProject, SimpleReports, WorkSpanControl } from '../src/components/phase4';
 import { MeetingsPage } from '../src/components/MeetingsPage';
 import { AttendanceControl } from '../src/components/AttendanceControl';
+import { AttendancePage } from '../src/components/AttendancePage';
 import type { AppData, WorkItem } from '../src/types';
 
 function fixture():AppData {
@@ -31,13 +32,18 @@ function fixture():AppData {
 }
 
 const base=fixture();
-const clockedIn=attendanceService.clockIn(base,'rahul',new Date('2026-10-09T03:30:00.000Z'));
+const clockedIn=attendanceService.clockInState(base,'rahul',new Date('2026-10-09T03:30:00.000Z'));
 assert.equal(clockedIn.attendanceEntries.length,1,'clock in creates a persisted attendance entry');
 assert.equal(clockedIn.attendanceEntries[0].userId,'rahul');
-assert.equal(attendanceService.clockIn(clockedIn,'rahul',new Date('2026-10-09T03:31:00.000Z')),clockedIn,'a user cannot create a second open attendance entry');
-const clockedOut=attendanceService.clockOut(clockedIn,'rahul',new Date('2026-10-09T12:30:00.000Z'));
+assert.equal(attendanceService.clockInState(clockedIn,'rahul',new Date('2026-10-09T03:31:00.000Z')),clockedIn,'a user cannot create a second open attendance entry');
+const clockedOut=attendanceService.clockOutState(clockedIn,'rahul',new Date('2026-10-09T12:30:00.000Z'));
 assert.equal(clockedOut.attendanceEntries[0].clockOutAt,'2026-10-09T12:30:00.000Z','clock out closes the existing entry');
-assert.ok(renderToStaticMarkup(createElement(AttendanceControl,{data:clockedIn,user:base.users.find(person=>person.id==='rahul')!,mutate:()=>{}})).includes('Clock out'),'active attendance renders the clock-out control');
+assert.ok(renderToStaticMarkup(createElement(AttendanceControl,{data:clockedIn,user:base.users.find(person=>person.id==='rahul')!})).includes('Clock out'),'active attendance renders the clock-out control');
+const resumed=attendanceService.clockInState(clockedOut,'rahul',new Date('2026-10-09T13:00:00.000Z'));
+assert.equal(resumed.attendanceEntries.length,2,'an employee can clock in again after an accidental early clock-out');
+const currentAttendance=attendanceService.clockInState(base,'rahul',new Date());
+const attendanceAdminHtml=renderToStaticMarkup(createElement(AttendancePage,{data:currentAttendance,user:base.users.find(person=>person.id==='kiran')!}));
+assert.ok(attendanceAdminHtml.includes('Custom range')&&attendanceAdminHtml.includes('Download CSV'),'admins receive ranged attendance review and export controls');
 assert.equal(enabledAccountFlag(true),true);
 assert.equal(enabledAccountFlag('true'),true);
 assert.equal(enabledAccountFlag(false),false);

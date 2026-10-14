@@ -43,7 +43,9 @@ const resumed=attendanceService.clockInState(clockedOut,'rahul',new Date('2026-1
 assert.equal(resumed.attendanceEntries.length,2,'an employee can clock in again after an accidental early clock-out');
 const currentAttendance=attendanceService.clockInState(base,'rahul',new Date());
 const attendanceAdminHtml=renderToStaticMarkup(createElement(AttendancePage,{data:currentAttendance,user:base.users.find(person=>person.id==='kiran')!}));
-assert.ok(attendanceAdminHtml.includes('Custom range')&&attendanceAdminHtml.includes('Download CSV'),'admins receive ranged attendance review and export controls');
+assert.ok(attendanceAdminHtml.includes('Attendance date')&&attendanceAdminHtml.includes('Download Excel'),'admins receive daily attendance review and export controls');
+assert.ok(attendanceAdminHtml.includes('Missing check-in / check-out'),'daily attendance includes employees without shifts');
+assert.equal(renderToStaticMarkup(createElement(AttendancePage,{data:currentAttendance,user:base.users.find(person=>person.id==='rahul')!})), '', 'employee cannot render the admin attendance page');
 assert.equal(enabledAccountFlag(true),true);
 assert.equal(enabledAccountFlag('true'),true);
 assert.equal(enabledAccountFlag(false),false);

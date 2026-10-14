@@ -42,7 +42,8 @@ const data={...seedData,users:[...employees,admin],attendanceEntries:entries};
 await assert.rejects(()=>buildAttendanceWorkbook(data,employees[0],'','2026-01-01','2026-01-04'),/Only admins/);
 const workbook=await buildAttendanceWorkbook(data,admin,'','2026-01-01','2026-01-04');
 const buffer=await workbook.xlsx.writeBuffer(),saved=new ExcelJS.Workbook();await saved.xlsx.load(buffer);
-const sheet=saved.getWorksheet('Attendance')!;
+const sheet=saved.getWorksheet('Jan 2026')!;
+const overview=saved.getWorksheet('Summary')!;
 assert.ok(sheet.getCell('B5').value instanceof Date,'matrix columns have typed dates');
 assert.equal((sheet.getCell('E5').value as Date).toISOString().slice(0,10),'2026-01-04');
 assert.equal(sheet.getCell('A6').value,'Asha');assert.equal(sheet.getCell('A7').value,'Bina');
@@ -55,10 +56,10 @@ assert.ok(sheet.getCell('B6').note,'shift details preserved in cell notes');
 assert.equal((sheet.getCell('B6').fill as ExcelJS.FillPattern).fgColor?.argb,'FFDCEEDD');
 assert.equal((sheet.getCell('C6').fill as ExcelJS.FillPattern).fgColor?.argb,'FFFFE4C4');
 assert.equal((sheet.getCell('D6').fill as ExcelJS.FillPattern).fgColor?.argb,'FFF0F2F3');
-assert.equal(sheet.getCell('A11').value,'Asha');assert.equal(sheet.getCell('B11').value,4);assert.equal(sheet.getCell('C11').value,2);
-assert.equal(sheet.getCell('A13').value,'All Employees');assert.equal(sheet.getCell('B13').value,8);
-for(const row of [5,6,7,10,11,13]){
-  for(let col=1;col<=(row>=10?8:5);col++){
+assert.equal(overview.getCell('A6').value,'Asha');assert.equal(overview.getCell('B6').value,4);assert.equal(overview.getCell('C6').value,2);
+assert.equal(overview.getCell('A8').value,'All Employees');assert.equal(overview.getCell('B8').value,8);
+for(const row of [5,6,7]){
+  for(let col=1;col<=8;col++){
     const cell=sheet.getRow(row).getCell(col);
     for(const side of ['top','bottom','left','right'] as const)assert.equal(cell.border[side]?.style,'thin','all table and summary cells retain borders after saving');
     assert.equal(cell.font.name,'Aptos');
@@ -66,15 +67,26 @@ for(const row of [5,6,7,10,11,13]){
 }
 assert.equal(sheet.views[0].showGridLines,false);
 assert.equal(sheet.pageSetup.orientation,'landscape');
-assert.equal(sheet.pageSetup.fitToWidth,0,'wide matrices print across pages without shrinking to illegible text');
+assert.equal(sheet.pageSetup.fitToWidth,1,'seven-day blocks fit one landscape page across');
 assert.equal((sheet.views[0] as ExcelJS.WorksheetViewFrozen).xSplit,1);
-assert.equal((sheet.getCell('A13').fill as ExcelJS.FillPattern).fgColor?.argb,'FF20372F');
+assert.equal((sheet.views[0] as ExcelJS.WorksheetViewFrozen).ySplit,3,'do not freeze the first week dates above later weeks');
+assert.equal(sheet.pageSetup.printTitlesRow,'1:3');
+assert.equal(sheet.getCell('H1').master.address,'A1','title spans the complete grid width');
+assert.equal((overview.getCell('A8').fill as ExcelJS.FillPattern).fgColor?.argb,'FF20372F');
 const detailed=await buildAttendanceWorkbook(data,admin,'a','2026-01-01','2026-01-04');
 assert.ok(detailed.getWorksheet('Attendance')!.getCell('A6').value instanceof Date);
 assert.equal(detailed.getWorksheet('Attendance')!.getCell('D6').numFmt,'dd mmm hh:mm');
 assert.equal(detailed.getWorksheet('Attendance')!.getCell('F6').value,9/24);
 const yearBoundary=await buildAttendanceWorkbook(data,admin,'','2025-12-31','2026-01-02');
-assert.equal((yearBoundary.getWorksheet('Attendance')!.getCell('D5').value as Date).toISOString().slice(0,10),'2026-01-02');
+assert.deepEqual(yearBoundary.worksheets.map(sheet=>sheet.name),['Summary','Dec 2025','Jan 2026']);
+assert.equal((yearBoundary.getWorksheet('Jan 2026')!.getCell('C5').value as Date).toISOString().slice(0,10),'2026-01-02');
+const monthBook=await buildAttendanceWorkbook(data,admin,'','2024-02-01','2024-03-03');
+const seen:string[]=[];
+for(const tab of monthBook.worksheets.slice(1)){
+  assert.equal(tab.columnCount,8,'all grids and headings have the same bounded width');
+  tab.eachRow(row=>{if(row.getCell(1).value==='Employee')row.eachCell(cell=>{if(cell.value instanceof Date)seen.push(cell.value.toISOString().slice(0,10));});});
+}
+assert.deepEqual(seen,calendarDays('2024-02-01','2024-03-03'),'each selected date appears exactly once, including leap day');
 const single=await buildAttendanceWorkbook(data,admin,'b','2026-01-01','2026-01-04');
 assert.equal(single.getWorksheet('Attendance')!.getCell('C6').value,'Bina');
 assert.equal(single.getWorksheet('Attendance')!.getCell('G6').value,'Missing check-in / check-out');

@@ -43,19 +43,22 @@ await assert.rejects(()=>buildAttendanceWorkbook(data,employees[0],'','2026-01-0
 const workbook=await buildAttendanceWorkbook(data,admin,'','2026-01-01','2026-01-04');
 const buffer=await workbook.xlsx.writeBuffer(),saved=new ExcelJS.Workbook();await saved.xlsx.load(buffer);
 const sheet=saved.getWorksheet('Attendance')!;
-assert.ok(sheet.getCell('A6').value instanceof Date,'dates survive export as typed Excel dates');
-assert.equal(sheet.getCell('D6').numFmt,'dd mmm hh:mm');
-assert.equal(sheet.getCell('F6').numFmt,'[h]:mm');
-assert.equal((sheet.getCell('F6').value as Date).getTime()-Date.UTC(1899,11,30),9*3600000);
-for(let col=1;col<=7;col++){
-  assert.equal((sheet.getRow(6).getCell(col).fill as ExcelJS.FillPattern).fgColor?.argb,'FFDCEEDD');
-  assert.equal((sheet.getRow(8).getCell(col).fill as ExcelJS.FillPattern).fgColor?.argb,'FFFFE4C4');
-  assert.equal((sheet.getRow(10).getCell(col).fill as ExcelJS.FillPattern).fgColor?.argb,'FFF0F2F3');
-}
-assert.equal(sheet.getCell('A17').value,'Asha');assert.equal(sheet.getCell('B17').value,4);assert.equal(sheet.getCell('C17').value,2);
-assert.equal(sheet.getCell('A19').value,'All Employees');assert.equal(sheet.getCell('B19').value,8);
-for(const row of [5,6,8,10,16,17,19]){
-  for(let col=1;col<=(row>=16?8:7);col++){
+assert.ok(sheet.getCell('B5').value instanceof Date,'matrix columns have typed dates');
+assert.equal((sheet.getCell('E5').value as Date).toISOString().slice(0,10),'2026-01-04');
+assert.equal(sheet.getCell('A6').value,'Asha');assert.equal(sheet.getCell('A7').value,'Bina');
+assert.equal(sheet.getCell('B6').numFmt,'[h]:mm');
+assert.equal((sheet.getCell('B6').value as Date).getTime()-Date.UTC(1899,11,30),9*3600000);
+assert.match(String(sheet.getCell('D6').value),/Incomplete/);
+assert.equal(sheet.getCell('E6').value,'Missing');
+assert.equal(sheet.getCell('B7').value,'Missing');
+assert.ok(sheet.getCell('B6').note,'shift details preserved in cell notes');
+assert.equal((sheet.getCell('B6').fill as ExcelJS.FillPattern).fgColor?.argb,'FFDCEEDD');
+assert.equal((sheet.getCell('C6').fill as ExcelJS.FillPattern).fgColor?.argb,'FFFFE4C4');
+assert.equal((sheet.getCell('D6').fill as ExcelJS.FillPattern).fgColor?.argb,'FFF0F2F3');
+assert.equal(sheet.getCell('A11').value,'Asha');assert.equal(sheet.getCell('B11').value,4);assert.equal(sheet.getCell('C11').value,2);
+assert.equal(sheet.getCell('A13').value,'All Employees');assert.equal(sheet.getCell('B13').value,8);
+for(const row of [5,6,7,10,11,13]){
+  for(let col=1;col<=(row>=10?8:5);col++){
     const cell=sheet.getRow(row).getCell(col);
     for(const side of ['top','bottom','left','right'] as const)assert.equal(cell.border[side]?.style,'thin','all table and summary cells retain borders after saving');
     assert.equal(cell.font.name,'Aptos');
@@ -63,8 +66,15 @@ for(const row of [5,6,8,10,16,17,19]){
 }
 assert.equal(sheet.views[0].showGridLines,false);
 assert.equal(sheet.pageSetup.orientation,'landscape');
-assert.equal(sheet.pageSetup.fitToWidth,1);
-assert.equal((sheet.getCell('A19').fill as ExcelJS.FillPattern).fgColor?.argb,'FF20372F');
+assert.equal(sheet.pageSetup.fitToWidth,0,'wide matrices print across pages without shrinking to illegible text');
+assert.equal((sheet.views[0] as ExcelJS.WorksheetViewFrozen).xSplit,1);
+assert.equal((sheet.getCell('A13').fill as ExcelJS.FillPattern).fgColor?.argb,'FF20372F');
+const detailed=await buildAttendanceWorkbook(data,admin,'a','2026-01-01','2026-01-04');
+assert.ok(detailed.getWorksheet('Attendance')!.getCell('A6').value instanceof Date);
+assert.equal(detailed.getWorksheet('Attendance')!.getCell('D6').numFmt,'dd mmm hh:mm');
+assert.equal(detailed.getWorksheet('Attendance')!.getCell('F6').value,9/24);
+const yearBoundary=await buildAttendanceWorkbook(data,admin,'','2025-12-31','2026-01-02');
+assert.equal((yearBoundary.getWorksheet('Attendance')!.getCell('D5').value as Date).toISOString().slice(0,10),'2026-01-02');
 const single=await buildAttendanceWorkbook(data,admin,'b','2026-01-01','2026-01-04');
 assert.equal(single.getWorksheet('Attendance')!.getCell('C6').value,'Bina');
 assert.equal(single.getWorksheet('Attendance')!.getCell('G6').value,'Missing check-in / check-out');

@@ -2,7 +2,10 @@
 .attendance-page .simple-title p,.attendance-page .attendance-daily-filters>label{color:var(--muted)}
 .attendance-page .attendance-filters.attendance-daily-filters{align-items:flex-end;gap:12px;padding:18px 20px;border-radius:8px;background:var(--paper);margin-bottom:16px}
 .attendance-daily-filters>label{display:flex;flex-direction:column;gap:8px;font-size:10px;letter-spacing:.08em}
-.attendance-daily-filters>label>input{margin:0;height:40px;box-sizing:border-box;border-radius:5px;font-family:inherit;font-size:13px;color:inherit}
+.attendance-daily-filters>label>input{margin:0;height:40px;box-sizing:border-box;border-radius:5px;font-family:inherit;font-size:13px;color:inherit;padding:0 10px;line-height:normal;display:inline-flex;align-items:center}
+.attendance-daily-filters input[type="date"]::-webkit-datetime-edit{display:inline-flex;align-items:center;padding:0;min-height:100%}
+.attendance-daily-filters input[type="date"]::-webkit-date-and-time-value{margin:0;text-align:left;line-height:38px}
+.attendance-daily-filters input[type="date"]::-webkit-datetime-edit-fields-wrapper{padding:0}
 .attendance-daily-filters>.secondary{height:40px;margin:0;border-radius:5px;padding-inline:18px}
 .attendance-page .attendance-daily-filters>span{font-size:13px;color:var(--ink);gap:3px;text-align:right;padding-bottom:2px}
 .attendance-page .attendance-daily-filters>span small{font-size:12px;color:var(--muted)}

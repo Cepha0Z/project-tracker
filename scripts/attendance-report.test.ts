@@ -54,6 +54,17 @@ for(let col=1;col<=7;col++){
 }
 assert.equal(sheet.getCell('A17').value,'Asha');assert.equal(sheet.getCell('B17').value,4);assert.equal(sheet.getCell('C17').value,2);
 assert.equal(sheet.getCell('A19').value,'All Employees');assert.equal(sheet.getCell('B19').value,8);
+for(const row of [5,6,8,10,16,17,19]){
+  for(let col=1;col<=(row>=16?8:7);col++){
+    const cell=sheet.getRow(row).getCell(col);
+    for(const side of ['top','bottom','left','right'] as const)assert.equal(cell.border[side]?.style,'thin','all table and summary cells retain borders after saving');
+    assert.equal(cell.font.name,'Aptos');
+  }
+}
+assert.equal(sheet.views[0].showGridLines,false);
+assert.equal(sheet.pageSetup.orientation,'landscape');
+assert.equal(sheet.pageSetup.fitToWidth,1);
+assert.equal((sheet.getCell('A19').fill as ExcelJS.FillPattern).fgColor?.argb,'FF20372F');
 const single=await buildAttendanceWorkbook(data,admin,'b','2026-01-01','2026-01-04');
 assert.equal(single.getWorksheet('Attendance')!.getCell('C6').value,'Bina');
 assert.equal(single.getWorksheet('Attendance')!.getCell('G6').value,'Missing check-in / check-out');

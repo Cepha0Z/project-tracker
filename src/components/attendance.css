@@ -1,18 +1,49 @@
-.attendance-filters.attendance-daily-filters{align-items:flex-end;gap:12px}
-.attendance-daily-filters>label{display:flex;flex-direction:column;gap:6px}
-.attendance-daily-filters>label>input{margin:0;height:39px;box-sizing:border-box}
-.attendance-daily-filters>.secondary{height:39px;margin:0}
-.attendance-explanation{font-size:12px;color:var(--muted);line-height:1.5}
-.attendance-daily-register{overflow-x:auto}
-.attendance-daily-register table{width:100%;min-width:750px;border-collapse:collapse;text-align:left;font-size:12px}
-.attendance-daily-register th,.attendance-daily-register td{padding:14px 16px;border-bottom:1px solid var(--line);vertical-align:middle}
-.attendance-daily-register thead{background:var(--sage);color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em}
-.attendance-daily-register small{display:block;color:var(--muted);margin-top:5px}
-.attendance-nine{background:#edf7ef}.attendance-under{background:#fff3e5}.attendance-incomplete{background:var(--paper)}
-.attendance-shifts summary{cursor:pointer;font-weight:600;white-space:nowrap}
-.attendance-shifts button{display:flex;align-items:center;gap:6px;padding:7px;margin-top:6px;border:1px solid var(--line);background:var(--paper);border-radius:4px;white-space:nowrap}
-.attendance-export-modal .simple-form-row label{display:flex;flex-direction:column;font-size:12px;min-width:0}
-.attendance-export-modal>p:not(.modal-kicker){font-size:12px;line-height:1.5;color:var(--muted)}
-.attendance-export-modal select,.attendance-export-modal input{min-height:42px;border-radius:4px;box-sizing:border-box}
-html[data-theme="dark"] .attendance-nine{background:#20372a}html[data-theme="dark"] .attendance-under{background:#342d23}
-@media(max-width:600px){.attendance-page .simple-title.row{gap:12px;align-items:flex-start;flex-wrap:wrap}.attendance-daily-filters label{flex:1;min-width:0}.attendance-daily-filters input{font-size:16px}.attendance-export-modal .simple-form-row{grid-template-columns:1fr}.attendance-daily-register th,.attendance-daily-register td{padding:12px}}
+.attendance-page{--attendance-green:#276647;--attendance-orange:#945618;--attendance-neutral:#66726b}
+.attendance-page .simple-title p,.attendance-page .attendance-daily-filters>label{color:var(--muted)}
+.attendance-page .attendance-filters.attendance-daily-filters{align-items:flex-end;gap:12px;padding:18px 20px;border-radius:8px;background:var(--paper);margin-bottom:16px}
+.attendance-daily-filters>label{display:flex;flex-direction:column;gap:8px;font-size:10px;letter-spacing:.08em}
+.attendance-daily-filters>label>input{margin:0;height:40px;box-sizing:border-box;border-radius:5px;font-family:inherit;font-size:13px;color:inherit}
+.attendance-daily-filters>.secondary{height:40px;margin:0;border-radius:5px;padding-inline:18px}
+.attendance-page .attendance-daily-filters>span{font-size:13px;color:var(--ink);gap:3px;text-align:right;padding-bottom:2px}
+.attendance-page .attendance-daily-filters>span small{font-size:12px;color:var(--muted)}
+.attendance-legend{display:flex;flex-wrap:wrap;gap:12px 20px;font-size:11px;color:var(--muted)}
+.attendance-legend>span{display:inline-flex;align-items:center;gap:7px}
+.attendance-legend>span::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--attendance-neutral)}
+.attendance-legend .nine::before{background:var(--attendance-green)}
+.attendance-legend .under::before{background:var(--attendance-orange)}
+.attendance-explanation{font-size:12px;color:var(--muted);line-height:1.6;margin:10px 0 18px}
+.attendance-daily-register{overflow-x:auto;border-radius:8px}
+.attendance-daily-register table{width:100%;min-width:800px;border-collapse:collapse;text-align:left;font-size:13px;font-variant-numeric:tabular-nums}
+.attendance-daily-register th,.attendance-daily-register td{padding:17px 18px;border-bottom:1px solid var(--line);vertical-align:middle}
+.attendance-daily-register th+th,.attendance-daily-register td{border-left:1px solid var(--line)}
+.attendance-daily-register thead{background:var(--sage);color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.07em}
+.attendance-daily-register thead th{padding-block:13px;white-space:nowrap}
+.attendance-daily-register tbody tr:last-child>*{border-bottom:0}
+.attendance-daily-register small{display:block;color:var(--muted);margin-top:7px;font-size:11px}
+.attendance-nine{background:#f0f7f2}.attendance-under{background:#fff6eb}.attendance-incomplete{background:var(--paper)}
+.attendance-person{display:flex;align-items:center;gap:10px;min-width:140px;font-weight:650}
+.attendance-initial{display:inline-flex;flex:0 0 32px;width:32px;height:32px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:50%;background:var(--paper);color:var(--muted);font-size:11px;line-height:1}
+.attendance-hours{font-weight:700;white-space:nowrap}
+.attendance-missing{color:var(--muted);font-size:12px}
+.attendance-status{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:650;line-height:1.5;color:var(--attendance-neutral)}
+.attendance-status::before{content:'';flex:0 0 6px;width:6px;height:6px;border-radius:50%;background:currentColor}
+.attendance-nine .attendance-status{color:var(--attendance-green)}
+.attendance-under .attendance-status{color:var(--attendance-orange)}
+.attendance-shifts summary{cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;border:1px solid var(--line);border-radius:5px;padding:7px 9px;background:var(--paper)}
+.attendance-shifts button{display:flex;align-items:center;gap:6px;padding:8px;margin-top:7px;border:1px solid var(--line);background:var(--paper);color:inherit;border-radius:5px;white-space:nowrap;font-size:11px}
+.attendance-shifts summary:hover,.attendance-shifts button:hover{border-color:var(--attendance-green)}
+.attendance-shifts summary:focus-visible{outline:2px solid var(--attendance-green);outline-offset:3px}
+.attendance-export-modal,.attendance-edit-modal{border-radius:10px;padding:30px!important}
+.attendance-export-modal>h2,.attendance-edit-modal>h2{margin-bottom:22px}
+.attendance-export-modal>label,.attendance-edit-modal>label,.attendance-export-modal .simple-form-row label{display:flex;flex-direction:column;gap:7px;font-size:12px;font-weight:600;min-width:0;margin-bottom:16px}
+.attendance-export-modal .simple-form-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.attendance-export-modal .simple-form-row>label:only-child{grid-column:1/-1}
+.attendance-export-modal>p:not(.modal-kicker),.attendance-edit-modal>p:not(.modal-kicker){font-size:12px;line-height:1.6;color:var(--muted)}
+.attendance-export-modal select,.attendance-export-modal input,.attendance-edit-modal input{margin:0;min-height:42px;width:100%;border:1px solid var(--line);border-radius:5px;box-sizing:border-box;padding:9px 11px;font-family:inherit}
+.attendance-export-modal>.primary,.attendance-edit-modal>.primary{margin-top:10px;min-height:44px;border-radius:5px}
+.attendance-export-modal>p.simple-error{color:#b33535}
+html[data-theme="dark"] .attendance-page{--attendance-green:#91cfac;--attendance-orange:#e1b881;--attendance-neutral:#acb8b0}
+html[data-theme="dark"] .attendance-page .attendance-nine{background:#20332b}
+html[data-theme="dark"] .attendance-page .attendance-under{background:#302b24}
+html[data-theme="dark"] .attendance-page .attendance-incomplete{background:#1b2520}
+@media(max-width:700px){.attendance-page .simple-title.row{gap:12px;align-items:flex-start;flex-wrap:wrap}.attendance-page .attendance-daily-filters{padding:14px}.attendance-daily-filters>label{flex:1;min-width:0}.attendance-daily-filters>label>input{font-size:16px;width:100%}.attendance-page .attendance-daily-filters>span{width:100%;text-align:left;margin:6px 0 0;padding-top:12px;border-top:1px solid var(--line)}.attendance-export-modal .simple-form-row{grid-template-columns:1fr}.attendance-daily-register th,.attendance-daily-register td{padding:13px}.attendance-export-modal,.attendance-edit-modal{padding:24px!important}}
